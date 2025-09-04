@@ -1,0 +1,11 @@
+{
+  "name": "wordsplainer-web-app",
+  "version": "1.0.0",
+  "description": "Web-based API and frontend for the Wordsplainer app.",
+  "scripts": {
+    "start": "netlify dev"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.0" 
+  }
+}

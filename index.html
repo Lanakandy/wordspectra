@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Radar Prototype - Enhanced Mobile</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+
+        .header-logo {
+            position: absolute;
+            top: clamp(10px, 2vh, 20px);
+            left: clamp(10px, 2vw, 20px);
+            width: clamp(60px, 12vw, 90px);
+            opacity: 1;
+            transition: opacity 0.2s;
+        }
+        .header-logo:hover {
+            opacity: 0.7;
+        }
+
+        #sound-toggle {
+            position: absolute;
+            top: clamp(10px, 2vh, 20px);
+            right: clamp(10px, 2vw, 20px);
+            left: auto;
+            background: rgba(40, 40, 60, 0.9);
+            border: 1px solid #9a9ac8;
+            border-radius: 8px;
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: background-color 0.2s;
+            z-index: 100;
+        }
+        #sound-toggle:hover { background: rgba(60, 60, 80, 0.9); }
+        #sound-toggle .sound-icon { width: clamp(16px, 4vw, 20px); height: clamp(16px, 4vw, 20px); margin-right: 8px; fill: #c0c0e0; }
+        #sound-toggle .sound-label { font-size: clamp(10px, 2.5vw, 12px); font-weight: 600; color: #e0e0e0; }
+        #sound-toggle .slash-icon { display: none; }
+        #sound-toggle.sound-off .slash-icon { display: block; }
+        #sound-toggle.sound-off path:not(.slash-icon) { opacity: 0.4; }
+
+        h1 { color: #ffffff; font-weight: 300; text-align: center; cursor: pointer; transition: color 0.2s; font-size: clamp(1.2rem, 4vw, 2rem); margin: clamp(10px, 2vh, 20px) 10px; padding: 0 10px; }
+        h1:hover { color: #ffca85; }
+
+        #chart-container { position: relative; width: calc(100vw - 20px); height: calc(100vh - 80px); max-width: 800px; max-height: 800px; min-width: 300px; min-height: 300px; }
+
+        @media (max-width: 768px) {
+            #chart-container { width: calc(100vw - 10px); height: calc(100vh - 60px); }
+            h1 { font-size: clamp(1rem, 5vw, 1.5rem); margin: 5px; }
+        }
+        @media (max-height: 600px) {
+            #chart-container { height: calc(100vh - 40px); }
+            h1 { margin: 5px; }
+        }
+        .hidden { display: none !important; }
+
+        #input-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10; }
+        #word-input { background: rgba(255, 255, 255, 0.1); border: 2px solid #9a9ac8; border-radius: 8px; color: white; font-size: clamp(16px, 5vw, 24px); font-weight: bold; text-align: center; padding: clamp(8px, 2vw, 10px) clamp(15px, 4vw, 20px); width: clamp(180px, 50vw, 250px); outline: none; transition: all 0.2s ease; -webkit-text-size-adjust: 100%; }
+        #word-input:focus { background: rgba(255, 255, 255, 0.2); transform: scale(1.05); }
+        @media (max-width: 768px) { #word-input { font-size: 16px; padding: 12px 16px; width: min(80vw, 300px); } }
+
+        #radar-scanner { position: absolute; top: 5%; left: 50%; margin-left: -1px; width: 2px; height: 45%; background: linear-gradient(to top, rgba(255, 107, 71, 0.8) 0%, rgba(255, 107, 71, 0) 100%); transform-origin: bottom center; animation: spin 3s linear infinite; z-index: 5; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        .radar-background, .spectrum-view { transition: opacity 0.5s ease-in-out; }
+        .radar-ring { stroke: #4f4f7a; stroke-width: 1px; }
+        .quadrant-line { stroke: #5f5f8a; stroke-width: 1.5px; }
+        .ring-label { fill: #6a6a8f; font-size: clamp(10px, 2vw, 12px); font-family: monospace; text-transform: uppercase; pointer-events: none; }
+        .quadrant-label { fill: #c0c0e0; font-size: clamp(12px, 3vw, 14px); font-weight: 600; text-transform: uppercase; cursor: pointer; transition: fill 0.2s ease-in-out, opacity 0.5s ease-in-out; }
+        .quadrant-label:hover { fill: #ffca85; }
+        .quadrant-label.active { fill: #ffca85; font-weight: 700; }
+        .spectrum-axis { stroke: #9a9ac8; stroke-width: 2px; stroke-dasharray: 4 4; }
+        .spectrum-label { fill: #c0c0e0; font-size: clamp(12px, 3vw, 14px); font-weight: 600; text-transform: uppercase; text-anchor: middle; }
+
+        .word-bubble { transition: opacity 0.5s ease-in-out; cursor: pointer; }
+        .word-bubble circle { cursor: pointer; transition: transform 0.2s ease-out, stroke-width 0.2s ease-out, stroke 0.2s ease-out; stroke: #1a1a2e; stroke-width: 2px; }
+        .word-bubble:hover circle { transform: scale(1.1); stroke: #ffffff; stroke-width: 3px; }
+        .word-bubble.selected circle { stroke: #ffca85; stroke-width: 4px; transform: scale(1.15); }
+        .word-bubble.dimmed { opacity: 0.25; pointer-events: none; }
+        .word-bubble text { fill: #ffffff; font-size: clamp(10px, 2.5vw, 12px); font-weight: bold; text-anchor: middle; pointer-events: none; text-shadow: 0 0 4px #000000; }
+        @media (max-width: 768px) {
+            .word-bubble:active circle { transform: scale(1.15); stroke: #ffffff; stroke-width: 3px; }
+            .quadrant-label:active { fill: #ffca85; }
+        }
+        
+        .tooltip { position: absolute; background-color: rgba(40, 40, 60, 0.95); border: 1px solid #9a9ac8; border-radius: 8px; padding: clamp(8px, 2vw, 12px); color: #e0e0e0; opacity: 0; pointer-events: none; transition: opacity 0.2s; max-width: clamp(220px, 70vw, 280px); font-size: clamp(12px, 3vw, 14px); box-shadow: 0 4px 15px rgba(0,0,0,0.4); backdrop-filter: blur(5px); z-index: 1000; }
+        .tooltip h3 { margin: 0 0 4px 0; color: #ffffff; font-size: clamp(14px, 3.5vw, 16px); }
+        .tooltip p { margin: 0 0 8px 0; font-style: italic; color: #c0c0e0; line-height: 1.3; }
+        .tooltip .example { font-style: normal; background-color: rgba(0,0,0,0.2); padding: 4px; border-radius: 4px; font-family: monospace; font-size: clamp(11px, 2.5vw, 13px); }
+        .tooltip .metadata { margin-top: 6px; padding-top: 6px; border-top: 1px solid #555; font-size: clamp(10px, 2.5vw, 12px); }
+        .tooltip .difficulty { display: inline-block; padding: 2px 4px; border-radius: 3px; font-size: clamp(8px, 2vw, 10px); font-weight: bold; text-transform: uppercase; }
+        .difficulty.beginner { background-color: #4CAF50; color: white; }
+        .difficulty.intermediate { background-color: #FF9800; color: white; }
+        .difficulty.advanced { background-color: #F44336; color: white; }
+        .comparison-tooltip { max-width: clamp(300px, 90vw, 500px); }
+        .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .comparison-col h4 { margin: 0 0 5px; color: #ffca85; }
+        .comparison-col p { font-size: clamp(11px, 2.8vw, 13px); }
+        .comparison-close { position: absolute; top: 8px; right: 10px; cursor: pointer; font-size: 18px; color: #aaa; }
+        .comparison-close:hover { color: white; }
+
+        #legend { position: absolute; bottom: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); background: rgba(40, 40, 60, 0.9); border: 1px solid #9a9ac8; border-radius: 8px; padding: clamp(10px, 2vw, 15px); font-size: clamp(10px, 2.5vw, 12px); color: #e0e0e0; max-width: clamp(150px, 35vw, 200px); backdrop-filter: blur(5px); transition: opacity 0.5s ease-in-out; }
+        #legend h4 { margin: 0 0 8px 0; color: #ffffff; font-size: clamp(12px, 3vw, 14px); }
+        #legend .legend-item { margin: 6px 0; display: flex; align-items: center;  cursor: pointer; transition: background-color 0.2s; border-radius: 4px; padding: 2px 4px; margin-left: -4px;  }
+        #legend .legend-item:hover { background-color: rgba(255,255,255,0.1); }
+        #legend .legend-circle { width: clamp(8px, 2vw, 12px); height: clamp(8px, 2vw, 12px); border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
+        #legend .legend-size-demo { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+        #legend .size-circle { border-radius: 50%; }
+        @media (max-width: 768px) { #legend { bottom: 5px; left: 5px; padding: 8px; max-width: min(40vw, 180px); font-size: 10px; } #legend h4 { font-size: 11px; margin-bottom: 6px; } #legend .legend-item { margin: 4px 0; } }
+        @media (max-height: 600px) { #legend { display: none; } }
+    </style>
+</head>
+<body>
+    <img src="https://eltcation.com/wp-content/uploads/2025/06/ELTcation_left.png" alt="ELTcation Logo" class="header-logo">
+    <div id="sound-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="sound-icon">
+            <path d="M16.364 3.636a1 1 0 0 1 0 1.414l-1.414 1.414a5 5 0 0 0 0 7.072l1.414 1.414a1 1 0 0 1-1.414 1.414l-1.414-1.414a7 7 0 0 1 0-9.898l1.414-1.414a1 1 0 0 1 1.414 0zM12 5.05L12 19.05a1 1 0 0 1-1.638.766L6 15H3a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1h3l4.362-4.816A1 1 0 0 1 12 5.05zm7.07 7.07a1 1 0 0 1-1.414-1.414l1.414-1.414a3 3 0 0 0 0-4.242l-1.414-1.414a1 1 0 1 1 1.414-1.414l1.414 1.414a5 5 0 0 1 0 7.07z"/>
+            <path class="slash-icon" d="M4.707 3.293a1 1 0 0 1 1.414 0l14.293 14.293a1 1 0 0 1-1.414 1.414L3.293 4.707a1 1 0 0 1 0-1.414z"/>
+        </svg>
+        <span class="sound-label">Sound ON</span>
+    </div>
+
+    <h1 id="main-title">Enter a word to build its Radar</h1>
+    <div id="chart-container">
+        <div id="input-container">
+            <form id="word-form">
+                <input type="text" id="word-input" placeholder="e.g., see" autocomplete="off">
+            </form>
+        </div>
+        <div id="radar-scanner" class="hidden"></div>
+        <div id="legend" class="hidden">
+            <h4>Legend</h4>
+            <!-- --- START: MODIFICATION --- (Legend items are now dynamically generated) -->
+            <div id="legend-items-container"></div>
+            <!-- --- END: MODIFICATION --- -->
+            <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #555;"><div style="margin-bottom: 5px;"><strong>Bubble Size:</strong></div><div class="legend-size-demo"><div class="size-circle" style="width: 8px; height: 8px; background-color: #666;"></div><span style="font-size: 10px;">Rare</span></div><div class="legend-size-demo"><div class="size-circle" style="width: 16px; height: 16px; background-color: #666;"></div><span style="font-size: 10px;">Common</span></div><div class="legend-size-demo"><div class="size-circle" style="width: 24px; height: 24px; background-color: #666;"></div><span style="font-size: 10px;">Very Common</span></div></div>
+        </div>
+    </div>
+    <div class="tooltip"></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const mainTitle = d3.select("#main-title");
+        const inputContainer = d3.select("#input-container");
+        const wordForm = d3.select("#word-form");
+        const scanner = d3.select("#radar-scanner");
+        const tooltip = d3.select(".tooltip");
+        const legend = d3.select("#legend");
+        
+        const container = d3.select("#chart-container");
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width;
+        const height = containerRect.height;
+        const maxRadius = Math.min(width, height) / 2 - (width < 768 ? 40 : 60);
+
+        const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
+            .on("click", (event) => {
+                if (selectedWords.length > 0) { clearComparison(); } 
+                else if (currentView === 'spectrum') { event.stopPropagation(); switchToRadarView(); }
+            });
+
+        const chartGroup = svg.append("g").attr("transform", `translate(${width / 2}, ${height / 2})`);
+
+        let currentView = 'radar', activeFacetIndex = null, currentBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null;
+
+        const facetColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
+        const isMobile = window.innerWidth <= 768;
+        const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [6, 20] : [10, 30]);
+        const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-maxRadius * 0.8, maxRadius * 0.8]);
+
+        const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
+        const spectrumGroup = chartGroup.append("g").attr("class", "spectrum-view").style("opacity", 0).attr("pointer-events", "none");
+        const bubblesGroup = chartGroup.append("g").attr("class", "bubbles-container");
+        const labelsGroup = chartGroup.append("g").attr("class", "labels-container");
+
+        drawRadarBackground();
+        drawSpectrumView();
+        wordForm.on("submit", handleFormSubmit);
+        mainTitle.on("click", resetToInitialState);
+        setupSoundToggle();
+
+        function setupSoundToggle() {
+            d3.select("#sound-toggle").on("click", () => {
+                isSoundOn = !isSoundOn;
+                d3.select("#sound-toggle").classed("sound-off", !isSoundOn).select(".sound-label").text(isSoundOn ? "Sound ON" : "Sound OFF");
+                if (!isSoundOn) { window.speechSynthesis.cancel(); }
+            });
+        }
+
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+            const word = d3.select("#word-input").property("value").trim();
+            if (!word) return;
+            if (currentView === 'spectrum') { await switchToRadarView(); }
+            mainTitle.style("cursor", "default").text(`Searching for "${word}"...`);
+            inputContainer.classed("hidden", true);
+            legend.classed("hidden", true);
+            scanner.classed("hidden", false);
+            clearChart();
+            const wordData = await fetchWordData(word);
+            currentRadarData = wordData;
+            scanner.classed("hidden", true);
+            if (wordData && wordData.words) {
+                mainTitle.text(`Word Radar: "${wordData.hub_word}"`).style("cursor", "pointer");
+                updateLegend(wordData.facets);
+                drawRadarBackground(wordData.rings);
+                drawWordBubbles(wordData);
+                legend.classed("hidden", false);
+            } else {
+                mainTitle.text(wordData.error || `No data for "${word}". Click to try again.`).style("cursor", "pointer");
+            }
+        }
+        
+        function resetToInitialState() {
+            if (!scanner.classed("hidden")) return;
+            switchToRadarView().then(() => {
+                clearChart();
+                mainTitle.text("Enter a word to build its Radar").style("cursor", "default");
+                inputContainer.classed("hidden", false);
+                legend.classed("hidden", true);
+                d3.select("#word-input").property("value", "").node().focus();
+            });
+        }
+        
+        function drawRadarBackground(rings = []) {
+            radarBgGroup.selectAll("*").remove(); 
+            const ringCount = 4;
+            const ringWidth = maxRadius / ringCount;
+            const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e"];
+            radarBgGroup.selectAll(".radar-ring").data(d3.range(ringCount - 1, -1, -1)).enter().append("circle").attr("class", "radar-ring").attr("r", d => (d + 1) * ringWidth).style("fill", (d, i) => ringColors[i]);
+            radarBgGroup.append("line").attr("class", "quadrant-line").attr("x1", 0).attr("y1", -maxRadius).attr("x2", 0).attr("y2", maxRadius);
+            radarBgGroup.append("line").attr("class", "quadrant-line").attr("x1", -maxRadius).attr("y1", 0).attr("x2", maxRadius).attr("y2", 0);
+            if(rings.length > 0) {
+                radarBgGroup.selectAll(".ring-label-path").data(rings).enter().append("path").attr("id", (d, i) => `ring-path-${i}`).attr("d", (d, i) => `M ${-(i + 0.5) * ringWidth}, 0 A ${(i + 0.5) * ringWidth},${(i + 0.5) * ringWidth} 0 0 1 ${(i + 0.5) * ringWidth},0`).style("fill", "none");
+                radarBgGroup.selectAll(".ring-label").data(rings).enter().append("text").attr("class", "ring-label").append("textPath").attr("startOffset", "50%").attr("xlink:href", (d, i) => `#ring-path-${i}`).text(d => d.toUpperCase());
+            }
+        }
+
+        function drawSpectrumView() {
+            spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
+            spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-left").attr("x", -maxRadius * 0.9).attr("y", -20);
+            spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-right").attr("x", maxRadius * 0.9).attr("y", -20);
+        }
+        
+        function drawWordBubbles(radarData) {
+            const labelOffset = maxRadius + (isMobile ? 15 : 25);
+            const labelData = radarData.facets.map((facet, i) => ({ ...facet, ...[{ x: labelOffset, y: 0, anchor: "start" }, { x: 0, y: labelOffset, anchor: "middle" }, { x: -labelOffset, y: 0, anchor: "end" }, { x: 0, y: -labelOffset, anchor: "middle" }][i], index: i }));
+            labelsGroup.selectAll(".quadrant-label").data(labelData).enter().append("text").attr("class", "quadrant-label").attr("x", d => d.x).attr("y", d => d.y).attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.name).on("click", (e, d) => { e.stopPropagation(); toggleSpectrumView(d.index, d); });
+            const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius]);
+            const nodes = radarData.words.map(d => {
+                const r = ringScale(d.ring + 0.5) + (Math.random() - 0.5) * (maxRadius / radarData.rings.length) * 0.5;
+                const angle = (d.facet * (Math.PI / 2)) + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
+                d.targetX = r * Math.cos(angle); d.targetY = r * Math.sin(angle); return d;
+            });
+            const simulation = d3.forceSimulation(nodes).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 3 : 4)).strength(0.8)).force("x", d3.forceX(d => d.targetX).strength(0.1)).force("y", d3.forceY(d => d.targetY).strength(0.1)).stop();
+            for (let i = 0; i < 200; ++i) simulation.tick();
+            nodes.forEach(d => { d.radarX = d.x; d.radarY = d.y; });
+            currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term).enter().append("g").attr("class", "word-bubble");
+            currentBubbles.append("circle").attr("r", 0).style("fill", (d, i) => facetColors[d.facet % 10]).transition().duration(500).delay((d,i) => i * 30).attr("r", d => bubbleSizeScale(d.frequency));
+            currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0).transition().duration(500).delay((d,i) => i * 30).style("opacity", 1);
+            currentBubbles.attr("transform", d => `translate(${d.radarX}, ${d.radarY})`);
+            setupTooltipEvents(currentBubbles);
+        }
+        
+        function clearChart() {
+            clearComparison();
+            if (currentBubbles) currentBubbles.remove();
+            labelsGroup.selectAll(".quadrant-label").remove();
+            radarBgGroup.selectAll(".ring-label, .ring-label-path").remove();
+            d3.select("#legend-items-container").selectAll("*").remove(); // Clear dynamic legend items
+        }
+
+        function toggleSpectrumView(facetIndex, facetData) {
+            clearComparison();
+            if (currentView === 'spectrum' && activeFacetIndex === facetIndex) { switchToRadarView(); } 
+            else { switchToSpectrumView(facetIndex, facetData); }
+        }
+
+        function switchToSpectrumView(facetIndex, facetData) {
+            currentView = 'spectrum'; activeFacetIndex = facetIndex;
+            mainTitle.text(`Spectrum: ${facetData.name}`);
+            spectrumGroup.select(".spectrum-label-left").text(facetData.spectrumLabels[0]);
+            spectrumGroup.select(".spectrum-label-right").text(facetData.spectrumLabels[1]);
+            spectrumGroup.transition().duration(500).style("opacity", 1).attr("pointer-events", "auto");
+            radarBgGroup.transition().duration(500).style("opacity", 0);
+            labelsGroup.selectAll(".quadrant-label").classed("active", d => d.index === facetIndex).transition().duration(500).style("opacity", d => d.index === facetIndex ? 1 : 0.2);
+            const allNodes = currentBubbles.data();
+            const facetKey = facetData.key;
+            const spectrumSimulation = d3.forceSimulation(allNodes).force("x", d3.forceX(d => spectrumScale(d.intensities[facetKey])).strength(1)).force("y", d3.forceY(0).strength(0.05)).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 2 : 3)).strength(0.8)).stop();
+            for (let i = 0; i < 150; ++i) { spectrumSimulation.tick(); }
+            currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.x}, ${d.y})`);
+        }
+
+        function switchToRadarView() {
+            return new Promise(resolve => {
+                if (currentView !== 'spectrum' && activeFacetIndex === null) { resolve(); return; }
+                clearComparison(); currentView = 'radar'; activeFacetIndex = null;
+                mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
+                legend.style("opacity", 1);
+                spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
+                radarBgGroup.transition().duration(500).style("opacity", 1);
+                labelsGroup.selectAll(".quadrant-label").classed("active", false).transition().duration(500).style("opacity", 1);
+                if (currentBubbles) {
+                    currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.radarX}, ${d.radarY})`).end().then(resolve);
+                } else { resolve(); }
+            });
+        }
+
+        function handleWordClick(event, d) {
+            event.stopPropagation(); tooltip.style("opacity", 0);
+            const node = d3.select(event.currentTarget);
+            const isSelected = selectedWords.some(sw => sw.term === d.term);
+            if (isSelected) {
+                selectedWords = selectedWords.filter(sw => sw.term !== d.term);
+                node.classed("selected", false);
+            } else { if (selectedWords.length < 2) { selectedWords.push(d); node.classed("selected", true); } }
+            if (selectedWords.length === 2) {
+                showComparisonTooltip(selectedWords[0], selectedWords[1]);
+                currentBubbles.classed("dimmed", data => !selectedWords.some(sw => sw.term === data.term));
+            } else { tooltip.classed("comparison-tooltip", false); currentBubbles.classed("dimmed", false); }
+        }
+
+        function clearComparison() {
+            if (!currentBubbles) return; 
+            selectedWords = [];
+            currentBubbles.classed("selected", false).classed("dimmed", false);
+            tooltip.style("opacity", 0).classed("comparison-tooltip", false);
+        }
+
+        function showComparisonTooltip(d1, d2) {
+            const content = `<div class="comparison-close" onclick="d3.select('.tooltip').style('opacity', 0); d3.selectAll('.word-bubble').classed('selected dimmed', false); window.selectedWords = [];">×</div><h3>Comparing Words</h3><div class="comparison-grid"><div class="comparison-col"><h4>${d1.term}</h4><p>${d1.definition}</p><div class="example">e.g., "${d1.example}"</div></div><div class="comparison-col"><h4>${d2.term}</h4><p>${d2.definition}</p><div class="example">e.g., "${d2.example}"</div></div></div><div class="metadata"><strong>Tip:</strong> Click the background to clear.</div>`;
+            tooltip.html(content).classed("comparison-tooltip", true).transition().duration(200).style("opacity", 0.95).style("left", `${width / 2 - tooltip.node().getBoundingClientRect().width / 2}px`).style("top", `${height / 2 - tooltip.node().getBoundingClientRect().height / 2}px`);
+        }
+
+        function speak(text, lang = 'en-US') { if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; window.speechSynthesis.speak(u); } else { console.warn("TTS not supported."); } }
+
+        function setupTooltipEvents(selection) {
+            selection.on("click", handleWordClick).on("mouseover", (event, d) => {
+                if (selectedWords.length > 0) return; if (isSoundOn) { speak(d.term); }
+                tooltip.transition().duration(200).style("opacity", .95);
+                let meta = ""; if (d.partOfSpeech || d.pronunciation) { meta += `<div class="metadata">`; if (d.partOfSpeech) meta += `<strong>PoS:</strong> ${d.partOfSpeech}<br>`; if (d.pronunciation) meta += `<strong>Pron:</strong> /${d.pronunciation}/<br>`; meta += `</div>`; }
+                tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>${meta}`);
+                const r = tooltip.node().getBoundingClientRect(); let l = event.pageX + 15, t = event.pageY - 28;
+                if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15;
+                if (t + r.height > window.innerHeight) t = event.pageY - r.height - 15;
+                if (t < 0) t = event.pageY + 15;
+                tooltip.style("left", l + "px").style("top", t + "px");
+            }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } });
+        }
+        
+        // --- START: MODIFICATION --- (Dynamic Legend + Consistent Events)
+        function updateLegend(facets) {
+            const legendItemsContainer = d3.select("#legend-items-container");
+            legendItemsContainer.selectAll("*").remove(); // Clear old items
+
+            const legendItems = legendItemsContainer.selectAll(".legend-item")
+                .data(facets)
+                .enter()
+                .append("div")
+                .attr("class", "legend-item")
+                .attr("data-facet-index", (d, i) => i);
+
+            legendItems.append("div")
+                .attr("class", "legend-circle")
+                .style("background-color", (d, i) => facetColors[i % 10]);
+
+            legendItems.append("span")
+                .text(d => d.name);
+            
+            setupLegendInteractivity(); // Re-attach events to the new items
+        }
+
+        function setupLegendInteractivity() {
+            legend.selectAll('.legend-item')
+                .on('click', function(event) {
+                    const facetIndex = d3.select(this).attr('data-facet-index');
+                    if (currentRadarData && currentRadarData.facets[facetIndex]) {
+                        const facetData = { ...currentRadarData.facets[facetIndex], index: parseInt(facetIndex) };
+                        toggleSpectrumView(parseInt(facetIndex), facetData);
+                    }
+                })
+                .on('mouseover', function() {
+                    if (selectedWords.length > 0 || !currentBubbles) return;
+                    const facetIndex = d3.select(this).attr('data-facet-index');
+                    currentBubbles.transition().duration(200)
+                        .style('opacity', d => d.facet == facetIndex ? 1 : 0.2);
+                })
+                .on('mouseout', function() {
+                    if (selectedWords.length > 0 || !currentBubbles) return;
+                    currentBubbles.transition().duration(200).style('opacity', 1);
+                });
+        }
+        // --- END: MODIFICATION ---
+
+        // --- START: MODIFICATION --- (Call the Netlify function)
+        async function fetchWordData(word) {
+            try {
+                const response = await fetch('/.netlify/functions/word-radar-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ word: word })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Server responded with status ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error("Failed to fetch word data:", error);
+                return { error: error.message }; // Return error object for display
+            }
+        }
+        // --- END: MODIFICATION ---
+    });
+    </script>
+</body>
+</html>
