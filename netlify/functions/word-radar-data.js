@@ -10,48 +10,40 @@ function getLLMPrompt(word) {
     const systemPrompt = `
 You are a brilliant computational linguist and data visualization expert. Your task is to analyze a central English word and generate a complete JSON dataset for a 'Word Radar' visualization.
 
-The visualization has two main components:
-1.  **Radar View:** A circular chart with 4 quadrants (semantic facets) and 4 concentric rings (relationship strength). Related words are placed as bubbles within this structure.
-2.  **Spectrum View:** Each facet is a spectrum. Words can be plotted along this spectrum based on a score from -1.0 to 1.0.
+Follow these instructions meticulously:
 
-Follow these instructions meticulously to generate the JSON data:
+**Step 1: Determine the Primary Part of Speech**
+-   Analyze the central word and identify its single, most common part of speech (e.g., for "watch", choose "verb" over "noun").
+-   The entire analysis MUST be based on this single part of speech.
 
-**Step 1: Analyze the Word**
-Deeply consider the nuances of the central word.
-
-**Step 2: Define 4 Semantic Facets (The Quadrants)**
--   Choose four distinct, meaningful semantic spectra that best describe the nuances of the words related to the central word. These will be the radar's axes.
+**Step 2: Define 2 to 4 Semantic Facets (The Quadrants)**
+-   Choose two, three, or four distinct, meaningful semantic spectra that best describe the nuances of related words. These will be the radar's axes.
 -   For each facet, provide:
     -   \`name\`: A human-readable title (e.g., "Intensity & Force").
     -   \`key\`: A single, lowercase programmatic key (e.g., "intensity").
     -   \`spectrumLabels\`: A two-element array of strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 (e.g., ["Subtle", "Forceful"]).
 
-**Step 3: Define 4 Relationship Rings**
--   Provide four short, descriptive names for the concentric rings, ordered from most central (0) to most peripheral (3). These represent the conceptual distance from the central word. Example: ["Core", "Common", "Specific", "Nuanced"].
-
-**Step 4: Generate 12-16 Related Words (The Bubbles)**
--   Create a list of related English words (synonyms, antonyms, related concepts).
+**Step 3: Generate 12-16 Related Words (The Bubbles)**
+-   Create a list of related English words (synonyms, antonyms, related concepts) for the determined part of speech.
 -   For EACH word, you MUST provide the following attributes:
     -   \`term\`: The word itself.
-    -   \`facet\`: The index (0-3) of the facet it belongs to from the list you created in Step 2.
-    -   \`ring\`: The index (0-3) of the ring it belongs to from the list you created in Step 3.
-    -   \`frequency\`: An estimated integer score from 0 (very rare) to 100 (very common) representing its general usage frequency.
+    -   \`facet\`: The index (0-3) of the facet it belongs to.
+    -   \`ring\`: An index from 0 (most central) to 3 (most peripheral) representing conceptual distance.
+    -   \`frequency\`: An estimated integer from 0 (very rare) to 100 (very common).
     -   \`definition\`: A concise, one-sentence definition.
     -   \`example\`: A natural, everyday example sentence.
-    -   \`partOfSpeech\`: The word's part of speech (e.g., "verb", "noun").
-    -   \`intensities\`: **CRITICAL**. This is an object containing a score from -1.0 to 1.0 for **EACH of the 4 facet keys** you defined in Step 2. This allows the word to be plotted on any of the four spectrums.
+    -   \`intensities\`: **CRITICAL**. An object containing a score from -1.0 to 1.0 for EACH of the facet keys you defined.
 
 **Final JSON Structure:**
-Your entire response MUST be ONLY a single, valid JSON object matching this structure. Do not include any explanations or markdown.
+Your entire response MUST be ONLY a single, valid JSON object matching this structure. Do not include any explanations, markdown, or text outside the JSON.
 
 \`\`\`json
 {
   "hub_word": "The original word",
+  "part_of_speech": "The most common part of speech, e.g., verb",
   "facets": [
     { "name": "e.g., Formality", "key": "formality", "spectrumLabels": ["Casual", "Formal"] },
-    { "name": "...", "key": "...", "spectrumLabels": ["...", "..."] },
-    { "name": "...", "key": "...", "spectrumLabels": ["...", "..."] },
-    { "name": "...", "key": "...", "spectrumLabels": ["...", "..."] }
+    { "name": "e.g., Speed", "key": "speed", "spectrumLabels": ["Slow", "Fast"] }
   ],
   "rings": ["Core", "Common", "Specific", "Nuanced"],
   "words": [
@@ -62,12 +54,9 @@ Your entire response MUST be ONLY a single, valid JSON object matching this stru
       "frequency": 40,
       "definition": "A brief, hurried look.",
       "example": "She glanced at her watch.",
-      "partOfSpeech": "verb",
       "intensities": {
         "formality": -0.3,
-        "speed": -0.8,
-        "emotion": 0.1,
-        "action": 0.5
+        "speed": -0.8
       }
     }
   ]
@@ -85,16 +74,12 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "qwen/qwen3-30b-a3b:free",
-        "deepseek/deepseek-chat-v3.1:free",
-        "openai/gpt-oss-20b:free",
-        "moonshotai/kimi-k2:free",
+        "mistralai/mistral-small-3.2-24b-instruct:free",
         "google/gemini-2.0-flash-exp:free",      
+        "google/gemma-3-12b-it:free",
         "tngtech/deepseek-r1t-chimera:free",        
         "tngtech/deepseek-r1t2-chimera:free",        
         "openai/gpt-oss-20b:free",
-        "mistralai/mistral-small-3.2-24b-instruct:free",
-        "google/gemma-3-12b-it:free",
         "meta-llama/llama-3.1-8b-instruct"
     ];
 
