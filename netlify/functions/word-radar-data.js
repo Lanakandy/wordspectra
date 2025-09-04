@@ -8,63 +8,42 @@ const fetch = require('node-fetch');
  */
 function getLLMPrompt(word) {
     const systemPrompt = `
-You are a brilliant computational linguist and data visualization expert. Your task is to analyze a central English word and generate a complete JSON dataset for a 'Word Radar' visualization.
+You are a computational linguist creating JSON data for a Word Radar visualization.
 
-Follow these instructions meticulously:
+TASK: Analyze "${word}" and output ONLY valid JSON with this exact structure:
 
-**Step 1: Determine the Primary Part of Speech**
--   Analyze the central word and identify its single, most common part of speech (e.g., for "watch", choose "verb" over "noun").
--   The entire analysis MUST be based on this single part of speech.
-
-**Step 2: Define 2 to 4 Semantic Facets (The Quadrants)**
--   Choose two, three, or four distinct, meaningful semantic spectra that best describe the nuances of related words. These will be the radar's axes.
--   For each facet, provide:
-    -   \`name\`: A human-readable title (e.g., "Intensity & Force").
-    -   \`key\`: A single, lowercase programmatic key (e.g., "intensity").
-    -   \`spectrumLabels\`: A two-element array of strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 (e.g., ["Subtle", "Forceful"]).
-
-**Step 3: Generate 12-16 Related Words (The Bubbles)**
--   Create a list of related English words (synonyms, related concepts) for the determined part of speech.
--   For EACH word, you MUST provide the following attributes:
-    -   \`term\`: The word itself.
-    -   \`facet\`: The index (0-3) of the facet it belongs to.
-    -   \`ring\`: An index from 0 (most central) to 3 (most peripheral) representing conceptual distance.
-    -   \`frequency\`: An estimated integer from 0 (very rare) to 100 (very common).
-    -   \`definition\`: A concise, one-sentence definition.
-    -   \`example\`: A natural, everyday example sentence.
-    -   \`intensities\`: **CRITICAL**. An object containing a score from -1.0 to 1.0 for EACH of the facet keys you defined.
-
-**Final JSON Structure:**
-Your entire response MUST be ONLY a single, valid JSON object matching this structure. Do not include any explanations, markdown, or text outside the JSON.
-
-\`\`\`json
 {
-  "hub_word": "The original word",
-  "part_of_speech": "The most common part of speech, e.g., verb",
+  "hub_word": "input word",
+  "part_of_speech": "primary POS (noun/verb/adjective/adverb)",
   "facets": [
-    { "name": "e.g., Formality", "key": "formality", "spectrumLabels": ["Casual", "Formal"] },
-    { "name": "e.g., Speed", "key": "speed", "spectrumLabels": ["Slow", "Fast"] }
+    {"name": "Spectrum Name", "key": "lowercase_key", "spectrumLabels": ["Low End", "High End"]}
   ],
   "rings": ["Core", "Common", "Specific", "Nuanced"],
   "words": [
     {
-      "term": "e.g., glance",
+      "term": "related word",
       "facet": 0,
       "ring": 1,
-      "frequency": 40,
-      "definition": "A brief, hurried look.",
-      "example": "She glanced at her watch.",
-      "intensities": {
-        "formality": -0.3,
-        "speed": -0.8
-      }
+      "frequency": 65,
+      "definition": "Brief definition",
+      "example": "Natural example sentence",
+      "intensities": {"key1": 0.3, "key2": -0.7}
     }
   ]
 }
-\`\`\`
-`;
 
-    const userPrompt = `Central Word: "${word}"`;
+REQUIREMENTS:
+1. Use the most common part of speech for the input word
+2. Create 2-4 facets (semantic dimensions) - each with name, key, and spectrumLabels
+3. Generate 12-16 related words, each with:
+   - facet: index (0-3) of which dimension it represents
+   - ring: distance from center (0=core, 3=peripheral)
+   - frequency: commonality (0-100)
+   - intensities: score (-1.0 to 1.0) for ALL facet keys
+
+Output ONLY the JSON - no explanations or markdown.`;
+
+    const userPrompt = word;
     
     return { systemPrompt, userPrompt };
 }
