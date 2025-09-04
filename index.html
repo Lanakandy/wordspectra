@@ -253,72 +253,18 @@
         }
 
         function drawSpectrumView() {
-            spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
-
-            const labels = [
-                { class: "spectrum-label-left", x: -maxRadius * 0.9, y: -20, text: "" },
-                { class: "spectrum-label-right", x: maxRadius * 0.9, y: -20, text: "" }
-            ];
-
-            // Use a group for each label to hold the text and its background
-            const labelGroups = spectrumGroup.selectAll(".spectrum-label-group")
-                .data(labels)
-                .enter()
-                .append("g")
-                .attr("class", d => `spectrum-label-group ${d.class}`);
-
-            labelGroups.append("text")
-                .attr("class", "spectrum-label")
-                .attr("x", d => d.x)
-                .attr("y", d => d.y);
-            
-            // This is where we update the text and add the background
-            // We need to do this in switchToSpectrumView where we know the text content
-        }
-
-        // Now, modify switchToSpectrumView to handle the label update
-        function switchToSpectrumView(facetIndex, facetData) {
-            currentView = 'spectrum'; activeFacetIndex = facetIndex;
-            mainTitle.text(`Spectrum: ${facetData.name}`);
-            
-            // --- MODIFICATION START ---
-            // Update left label
-            const leftLabel = spectrumGroup.select(".spectrum-label-left text");
-            leftLabel.text(facetData.spectrumLabels[0]);
-            addLabelBackground(leftLabel);
-
-            // Update right label
-            const rightLabel = spectrumGroup.select(".spectrum-label-right text");
-            rightLabel.text(facetData.spectrumLabels[1]);
-            addLabelBackground(rightLabel);
-            // --- MODIFICATION END ---
-
-            spectrumGroup.transition().duration(500).style("opacity", 1).attr("pointer-events", "auto");
-            radarBgGroup.transition().duration(500).style("opacity", 0);
-            labelsGroup.selectAll(".quadrant-label").classed("active", d => d.index === facetIndex).transition().duration(500).style("opacity", d => d.index === facetIndex ? 1 : 0.2);
-            const allNodes = currentBubbles.data();
-            const facetKey = facetData.key;
-            const spectrumSimulation = d3.forceSimulation(allNodes).force("x", d3.forceX(d => spectrumScale(d.intensities[facetKey])).strength(1)).force("y", d3.forceY(0).strength(0.05)).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 2 : 3)).strength(0.8)).stop();
-            for (let i = 0; i < 150; ++i) { spectrumSimulation.tick(); }
-            currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.x}, ${d.y})`);
-        }
-
-        // Add this new helper function anywhere inside the main script tag
-        function addLabelBackground(textSelection) {
-            const group = d3.select(textSelection.node().parentNode);
-            group.select("rect").remove(); // Remove old background if it exists
-
-            const padding = 4;
-            const bbox = textSelection.node().getBBox();
-            
-            group.insert("rect", "text") // Insert rect before the text
-                .attr("x", bbox.x - padding)
-                .attr("y", bbox.y - padding)
-                .attr("width", bbox.width + (padding * 2))
-                .attr("height", bbox.height + (padding * 2))
-                .attr("rx", 3) // Rounded corners
-                .style("fill", "#1a1a2e"); // Fill with the page background color
-        }
+    spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
+    // Position labels below the axis line for clear separation from bubbles
+    const labelYOffset = 35;
+    spectrumGroup.append("text")
+        .attr("class", "spectrum-label spectrum-label-left")
+        .attr("x", -maxRadius * 0.9)
+        .attr("y", labelYOffset);
+    spectrumGroup.append("text")
+        .attr("class", "spectrum-label spectrum-label-right")
+        .attr("x", maxRadius * 0.9)
+        .attr("y", labelYOffset);
+}
         
         function drawWordBubbles(radarData) {
             const labelOffset = maxRadius + (isMobile ? 15 : 25);
@@ -355,34 +301,45 @@
         }
 
         function switchToSpectrumView(facetIndex, facetData) {
-            currentView = 'spectrum'; activeFacetIndex = facetIndex;
-            mainTitle.text(`Spectrum: ${facetData.name}`);
-            spectrumGroup.select(".spectrum-label-left").text(facetData.spectrumLabels[0]);
-            spectrumGroup.select(".spectrum-label-right").text(facetData.spectrumLabels[1]);
-            spectrumGroup.transition().duration(500).style("opacity", 1).attr("pointer-events", "auto");
-            radarBgGroup.transition().duration(500).style("opacity", 0);
-            labelsGroup.selectAll(".quadrant-label").classed("active", d => d.index === facetIndex).transition().duration(500).style("opacity", d => d.index === facetIndex ? 1 : 0.2);
-            const allNodes = currentBubbles.data();
-            const facetKey = facetData.key;
-            const spectrumSimulation = d3.forceSimulation(allNodes).force("x", d3.forceX(d => spectrumScale(d.intensities[facetKey])).strength(1)).force("y", d3.forceY(0).strength(0.05)).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 2 : 3)).strength(0.8)).stop();
-            for (let i = 0; i < 150; ++i) { spectrumSimulation.tick(); }
-            currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.x}, ${d.y})`);
-        }
+    currentView = 'spectrum'; activeFacetIndex = facetIndex;
+    mainTitle.text(`Spectrum: ${facetData.name}`);
+    
+    // Populate the (now safely positioned) spectrum labels with text
+    spectrumGroup.select(".spectrum-label-left").text(facetData.spectrumLabels[0].toUpperCase());
+    spectrumGroup.select(".spectrum-label-right").text(facetData.spectrumLabels[1].toUpperCase());
+    
+    // --- FIX: Explicitly hide the RADAR labels and show the SPECTRUM labels ---
+    spectrumGroup.transition().duration(500).style("opacity", 1).attr("pointer-events", "auto");
+    labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none"); // HIDE the radar labels
+    
+    radarBgGroup.transition().duration(500).style("opacity", 0);
+    const allNodes = currentBubbles.data();
+    const facetKey = facetData.key;
+    const spectrumSimulation = d3.forceSimulation(allNodes).force("x", d3.forceX(d => spectrumScale(d.intensities[facetKey])).strength(1)).force("y", d3.forceY(0).strength(0.05)).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 2 : 3)).strength(0.8)).stop();
+    for (let i = 0; i < 150; ++i) { spectrumSimulation.tick(); }
+    currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.x}, ${d.y})`);
+}
 
         function switchToRadarView() {
-            return new Promise(resolve => {
-                if (currentView !== 'spectrum' && activeFacetIndex === null) { resolve(); return; }
-                clearComparison(); currentView = 'radar'; activeFacetIndex = null;
-                mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
-                legend.style("opacity", 1);
-                spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
-                radarBgGroup.transition().duration(500).style("opacity", 1);
-                labelsGroup.selectAll(".quadrant-label").classed("active", false).transition().duration(500).style("opacity", 1);
-                if (currentBubbles) {
-                    currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.radarX}, ${d.radarY})`).end().then(resolve);
-                } else { resolve(); }
-            });
-        }
+    return new Promise(resolve => {
+        if (currentView !== 'spectrum' && activeFacetIndex === null) { resolve(); return; }
+        clearComparison(); currentView = 'radar'; activeFacetIndex = null;
+        mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
+        legend.style("opacity", 1);
+        
+        // --- FIX: Explicitly hide SPECTRUM labels and show the RADAR labels ---
+        spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
+        radarBgGroup.transition().duration(500).style("opacity", 1);
+        
+        // Remove active class from any label and fade the whole group back in
+        labelsGroup.selectAll(".quadrant-label").classed("active", false);
+        labelsGroup.transition().duration(500).style("opacity", 1).attr("pointer-events", "auto"); // SHOW the radar labels
+
+        if (currentBubbles) {
+            currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.radarX}, ${d.radarY})`).end().then(resolve);
+        } else { resolve(); }
+    });
+}
 
         function handleWordClick(event, d) {
             event.stopPropagation(); tooltip.style("opacity", 0);
