@@ -6,3 +6,9 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# netlify.toml
+
+[functions]
+  # Increase the timeout for all functions to 26 seconds
+  timeout = 26
