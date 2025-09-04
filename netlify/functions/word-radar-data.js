@@ -24,7 +24,7 @@ Follow these instructions meticulously:
     -   \`spectrumLabels\`: A two-element array of strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 (e.g., ["Subtle", "Forceful"]).
 
 **Step 3: Generate 12-16 Related Words (The Bubbles)**
--   Create a list of related English words (synonyms, antonyms, related concepts) for the determined part of speech.
+-   Create a list of related English words (synonyms, related concepts) for the determined part of speech.
 -   For EACH word, you MUST provide the following attributes:
     -   \`term\`: The word itself.
     -   \`facet\`: The index (0-3) of the facet it belongs to.
@@ -74,13 +74,8 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "tngtech/deepseek-r1t-chimera:free",   
         "google/gemini-2.0-flash-exp:free", 
         "mistralai/mistral-small-3.2-24b-instruct:free",
-        "google/gemini-2.0-flash-exp:free",      
-        "tngtech/deepseek-r1t-chimera:free",        
-        "tngtech/deepseek-r1t2-chimera:free",        
-        "openai/gpt-oss-20b:free",
         "meta-llama/llama-3.1-8b-instruct"
     ];
 
