@@ -254,8 +254,16 @@
 
         function drawSpectrumView() {
             spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
-            spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-left").attr("x", -maxRadius * 0.9).attr("y", -20);
-            spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-right").attr("x", maxRadius * 0.9).attr("y", -20);
+            // Move labels below the axis by changing y from a negative to a positive value
+            const labelYOffset = 35; // Increased distance for better clearance
+            spectrumGroup.append("text")
+                .attr("class", "spectrum-label spectrum-label-left")
+                .attr("x", -maxRadius * 0.9)
+                .attr("y", labelYOffset); // <-- CHANGE HERE
+            spectrumGroup.append("text")
+                .attr("class", "spectrum-label spectrum-label-right")
+                .attr("x", maxRadius * 0.9)
+                .attr("y", labelYOffset); // <-- CHANGE HERE
         }
         
         function drawWordBubbles(radarData) {
