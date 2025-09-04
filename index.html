@@ -253,17 +253,28 @@
         }
 
         function drawSpectrumView() {
-    spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
-    // Position labels below the axis line for clear separation from bubbles
-    const labelYOffset = 35;
+    spectrumGroup.append("line")
+        .attr("class", "spectrum-axis")
+        .attr("x1", -maxRadius * 0.9)
+        .attr("x2", maxRadius * 0.9);
+
+    const labelPadding = 15; // The space between the end of the line and the start of the text
+
+    // Left Label
     spectrumGroup.append("text")
         .attr("class", "spectrum-label spectrum-label-left")
-        .attr("x", -maxRadius * 0.9)
-        .attr("y", labelYOffset);
+        .attr("x", -maxRadius * 0.9 - labelPadding) // Position it to the left of the line's end
+        .attr("y", 0) // Align it vertically with the line
+        .attr("text-anchor", "end") // Anchor the text by its right edge
+        .attr("dominant-baseline", "middle"); // Center the text vertically on the y-coordinate
+
+    // Right Label
     spectrumGroup.append("text")
         .attr("class", "spectrum-label spectrum-label-right")
-        .attr("x", maxRadius * 0.9)
-        .attr("y", labelYOffset);
+        .attr("x", maxRadius * 0.9 + labelPadding) // Position it to the right of the line's end
+        .attr("y", 0) // Align it vertically with the line
+        .attr("text-anchor", "start") // Anchor the text by its left edge
+        .attr("dominant-baseline", "middle"); // Center the text vertically on the y-coordinate
 }
         
         function drawWordBubbles(radarData) {
