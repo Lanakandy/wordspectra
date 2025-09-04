@@ -254,16 +254,70 @@
 
         function drawSpectrumView() {
             spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
-            // Move labels below the axis by changing y from a negative to a positive value
-            const labelYOffset = 35; // Increased distance for better clearance
-            spectrumGroup.append("text")
-                .attr("class", "spectrum-label spectrum-label-left")
-                .attr("x", -maxRadius * 0.9)
-                .attr("y", labelYOffset); // <-- CHANGE HERE
-            spectrumGroup.append("text")
-                .attr("class", "spectrum-label spectrum-label-right")
-                .attr("x", maxRadius * 0.9)
-                .attr("y", labelYOffset); // <-- CHANGE HERE
+
+            const labels = [
+                { class: "spectrum-label-left", x: -maxRadius * 0.9, y: -20, text: "" },
+                { class: "spectrum-label-right", x: maxRadius * 0.9, y: -20, text: "" }
+            ];
+
+            // Use a group for each label to hold the text and its background
+            const labelGroups = spectrumGroup.selectAll(".spectrum-label-group")
+                .data(labels)
+                .enter()
+                .append("g")
+                .attr("class", d => `spectrum-label-group ${d.class}`);
+
+            labelGroups.append("text")
+                .attr("class", "spectrum-label")
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+            
+            // This is where we update the text and add the background
+            // We need to do this in switchToSpectrumView where we know the text content
+        }
+
+        // Now, modify switchToSpectrumView to handle the label update
+        function switchToSpectrumView(facetIndex, facetData) {
+            currentView = 'spectrum'; activeFacetIndex = facetIndex;
+            mainTitle.text(`Spectrum: ${facetData.name}`);
+            
+            // --- MODIFICATION START ---
+            // Update left label
+            const leftLabel = spectrumGroup.select(".spectrum-label-left text");
+            leftLabel.text(facetData.spectrumLabels[0]);
+            addLabelBackground(leftLabel);
+
+            // Update right label
+            const rightLabel = spectrumGroup.select(".spectrum-label-right text");
+            rightLabel.text(facetData.spectrumLabels[1]);
+            addLabelBackground(rightLabel);
+            // --- MODIFICATION END ---
+
+            spectrumGroup.transition().duration(500).style("opacity", 1).attr("pointer-events", "auto");
+            radarBgGroup.transition().duration(500).style("opacity", 0);
+            labelsGroup.selectAll(".quadrant-label").classed("active", d => d.index === facetIndex).transition().duration(500).style("opacity", d => d.index === facetIndex ? 1 : 0.2);
+            const allNodes = currentBubbles.data();
+            const facetKey = facetData.key;
+            const spectrumSimulation = d3.forceSimulation(allNodes).force("x", d3.forceX(d => spectrumScale(d.intensities[facetKey])).strength(1)).force("y", d3.forceY(0).strength(0.05)).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 2 : 3)).strength(0.8)).stop();
+            for (let i = 0; i < 150; ++i) { spectrumSimulation.tick(); }
+            currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.x}, ${d.y})`);
+        }
+
+        // Add this new helper function anywhere inside the main script tag
+        function addLabelBackground(textSelection) {
+            const group = d3.select(textSelection.node().parentNode);
+            group.select("rect").remove(); // Remove old background if it exists
+
+            const padding = 4;
+            const bbox = textSelection.node().getBBox();
+            
+            group.insert("rect", "text") // Insert rect before the text
+                .attr("x", bbox.x - padding)
+                .attr("y", bbox.y - padding)
+                .attr("width", bbox.width + (padding * 2))
+                .attr("height", bbox.height + (padding * 2))
+                .attr("rx", 3) // Rounded corners
+                .style("fill", "#1a1a2e"); // Fill with the page background color
         }
         
         function drawWordBubbles(radarData) {
