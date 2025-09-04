@@ -1,14 +1,19 @@
+# netlify.toml
+
+# Build settings: where your site and functions are located
 [build]
   publish = "/"
   functions = "netlify/functions"
 
+# Function runtime settings
+[functions]
+  # Increase the timeout for all functions to 26 seconds
+  # This is crucial for long-running AI API calls
+  timeout = 26
+
+# Redirect rule for Single Page Applications (SPA)
+# This ensures that refreshing the page on any sub-path still loads your app
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-# netlify.toml
-
-[functions]
-  # Increase the timeout for all functions to 26 seconds
-  timeout = 26
