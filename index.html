@@ -65,7 +65,7 @@
             transition: all 0.2s ease;
         }
         .pos-option:hover {
-            background: rgba(60, 60, 80, 0.9);
+            background: rgba(255, 107, 71, 0.9);
         }
         .pos-option.selected {
             background-color: #ffca85;
@@ -334,7 +334,7 @@
         function drawSpectrumView() {
             spectrumGroup.selectAll("*").remove(); // Clear previous elements
             spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
-            const labelPadding = isMobile ? 8 : 15;
+            const labelPadding = isMobile ? 12 : 25;
             spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-left").attr("x", -maxRadius * 0.9 - labelPadding).attr("text-anchor", "end").attr("dominant-baseline", "middle");
             spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-right").attr("x", maxRadius * 0.9 + labelPadding).attr("text-anchor", "start").attr("dominant-baseline", "middle");
         }
