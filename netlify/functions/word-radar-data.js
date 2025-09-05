@@ -5,58 +5,74 @@ const fetch = require('node-fetch');
 /**
  * Generates the system and user prompts for the LLM.
  * This is the core logic for the Word Radar data generation.
- * --- START: MODIFICATION ---
- * The function now accepts partOfSpeech and a category to create a more focused prompt.
  */
 function getLLMPrompt(word, partOfSpeech, category) {
     const systemPrompt = `
 You are a brilliant computational linguist and data visualization expert. Your task is to analyze a central English word for a specific part of speech and generate a complete JSON dataset for a 'Word Radar' visualization.
 
-Follow these instructions meticulously:
+Your process must be methodical and precise. Follow these steps exactly:
 
 **Step 1: Define 2 to 4 Semantic Facets (The Quadrants)**
--   Based on the user-provided word and its part of speech, choose two, three, or four distinct, meaningful semantic spectra that best describe the nuances of related words. These will be the radar's axes.
--   **IMPORTANT**: If the user provides a "Focus Category," you MUST create a facet that directly relates to or incorporates this category. For example, if the category is "Formality", one of your facets must be about formality.
--   For each facet, provide:
-    -   \`name\`: A human-readable title (e.g., "Intensity & Force").
-    -   \`key\`: A single, lowercase programmatic key (e.g., "intensity").
-    -   \`spectrumLabels\`: A two-element array of strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 (e.g., ["Subtle", "Forceful"]).
+-   Based on the user-provided word and part of speech, choose two, three, or four distinct, meaningful semantic spectra. These will be the radar's axes.
+-   **IMPORTANT**: If the user provides a "Focus Category," you MUST create a facet that directly relates to it.
+-   For each facet, define its \`name\`, \`key\`, and \`spectrumLabels\`.
 
-**Step 2: Generate 12-16 Related Words (The Bubbles)**
--   Create a list of related English words (synonyms, related concepts) that match the requested part of speech.
--   For EACH word, you MUST provide the following attributes:
+**Step 2: Generate Words FOR EACH FACET and Combine**
+-   This step is CRITICAL. You must generate words in batches, one batch for each facet you defined in Step 1.
+-   For each facet (e.g., "Formality", "Intensity"), generate 3-5 related words that strongly exemplify that specific semantic dimension.
+-   **ENSURE DIVERSITY**: The final list of words MUST be distributed across all the facets you created. Do not assign all words to a single facet index.
+-   For EACH word, you MUST provide:
     -   \`term\`: The word itself.
-    -   \`facet\`: The index (0-3) of the facet it belongs to.
+    -   \`facet\`: The index (0-3) of the facet it belongs to. This MUST be correct.
     -   \`ring\`: An index from 0 (most central) to 3 (most peripheral) representing conceptual distance.
     -   \`frequency\`: An estimated integer from 0 (very rare) to 100 (very common).
     -   \`definition\`: A concise, one-sentence definition.
     -   \`example\`: A natural, everyday example sentence.
-    -   \`intensities\`: **CRITICAL**. An object containing a score from -1.0 to 1.0 for EACH of the facet keys you defined.
+    -   \`intensities\`: An object with a score from -1.0 to 1.0 for EACH of the facet keys defined in Step 1.
+
+**Step 3: Final Verification**
+-   Before generating the final JSON, mentally review your list of words. Confirm that you have assigned words to multiple different facet indexes (e.g., words with \`"facet": 0\`, \`"facet": 1\`, and \`"facet": 2\`).
 
 **Final JSON Structure:**
-Your entire response MUST be ONLY a single, valid JSON object matching this structure. Do not include any explanations, markdown, or text outside the JSON.
+Your entire response MUST be ONLY a single, valid JSON object. Do not include any text outside the JSON. The 'words' array should contain a mix of words from all created facets.
 
 \`\`\`json
 {
   "hub_word": "The original word",
   "part_of_speech": "The user-provided part of speech, e.g., verb",
   "facets": [
-    { "name": "e.g., Formality", "key": "formality", "spectrumLabels": ["Casual", "Formal"] },
-    { "name": "e.g., Speed", "key": "speed", "spectrumLabels": ["Slow", "Fast"] }
+    { "name": "e.g., Speed & Pace", "key": "speed", "spectrumLabels": ["Leisurely", "Hurried"] },
+    { "name": "e.g., Formality & Purpose", "key": "formality", "spectrumLabels": ["Casual", "Official"] },
+    { "name": "e.g., Difficulty of Terrain", "key": "terrain", "spectrumLabels": ["Easy", "Difficult"] }
   ],
   "rings": ["Core", "Common", "Specific", "Nuanced"],
   "words": [
     {
-      "term": "e.g., glance",
+      "term": "stroll",
       "facet": 0,
       "ring": 1,
-      "frequency": 40,
-      "definition": "A brief, hurried look.",
-      "example": "She glanced at her watch.",
-      "intensities": {
-        "formality": -0.3,
-        "speed": -0.8
-      }
+      "frequency": 45,
+      "definition": "To walk in a leisurely way.",
+      "example": "They strolled through the park on Sunday afternoon.",
+      "intensities": { "speed": -0.8, "formality": -0.4, "terrain": -0.5 }
+    },
+    {
+      "term": "march",
+      "facet": 1,
+      "ring": 2,
+      "frequency": 30,
+      "definition": "To walk in a military manner with a regular measured tread.",
+      "example": "The soldiers marched in perfect formation.",
+      "intensities": { "speed": 0.3, "formality": 0.9, "terrain": 0.1 }
+    },
+    {
+      "term": "hike",
+      "facet": 2,
+      "ring": 2,
+      "frequency": 55,
+      "definition": "To walk for a long distance, especially across country or in the woods.",
+      "example": "We plan to hike the entire trail next summer.",
+      "intensities": { "speed": -0.2, "formality": -0.6, "terrain": 0.8 }
     }
   ]
 }
@@ -70,7 +86,8 @@ Your entire response MUST be ONLY a single, valid JSON object matching this stru
     
     return { systemPrompt, userPrompt };
 }
-// --- END: MODIFICATION ---
+
+// ... (the rest of the file, callOpenRouterWithFallback and handler, remains exactly the same) ...
 
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -80,7 +97,6 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
         "google/gemma-3-4b-it", 
         "google/gemini-2.0-flash-exp:free", 
         "mistralai/mistral-small-3.2-24b-instruct:free"
-               
     ];
 
     for (const model of modelsToTry) {
@@ -132,15 +148,13 @@ exports.handler = async function(event) {
 
     try {
         const body = JSON.parse(event.body);
-        // --- START: MODIFICATION ---
-        const { word, partOfSpeech, category } = body; // category is optional
+        const { word, partOfSpeech, category } = body;
         
         if (!word || !partOfSpeech) {
             return { statusCode: 400, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         }
 
         const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category);
-        // --- END: MODIFICATION ---
         
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
