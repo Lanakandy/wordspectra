@@ -19,7 +19,7 @@ Your process must be methodical and precise. Follow these steps exactly:
 
 **Step 2: Generate Words FOR EACH FACET and Combine**
 -   This step is CRITICAL. You must generate words in batches, one batch for each facet you defined in Step 1.
--   For each facet (e.g., "Formality", "Intensity"), generate up to 5 related words that strongly exemplify that specific semantic dimension.
+-   For each facet (e.g., "Formality", "Intensity"), generate 5-10 related words that strongly exemplify that specific semantic dimension.
 -   **ENSURE DIVERSITY**: The final list of words MUST be distributed across all the facets you created. Do not assign all words to a single facet index.
 -   For EACH word, you MUST provide:
     -   \`term\`: The word itself.
