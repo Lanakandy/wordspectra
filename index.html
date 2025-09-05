@@ -214,7 +214,9 @@
         
         const isMobile = window.innerWidth <= 768;
         
-        const maxRadius = Math.min(width, height) / 2 - (isMobile ? 70 : 120);
+        const margin = isMobile ? 65 : 100;
+
+        const maxRadius = (Math.min(width, height) / 2) - margin;
         
         const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
             .on("click", (event) => {
@@ -342,7 +344,7 @@
         }
 
         function drawWordBubbles(radarData) {
-            const labelOffset = maxRadius + (isMobile ? 15 : 25);
+            const labelOffset = maxRadius + (isMobile ? 30 : 50);
             const labelData = radarData.facets.map((facet, i) => ({ ...facet, ...[{ x: labelOffset, y: 0, anchor: "start" }, { x: 0, y: labelOffset, anchor: "middle" }, { x: -labelOffset, y: 0, anchor: "end" }, { x: 0, y: -labelOffset, anchor: "middle" }][i], index: i }));
             labelsGroup.selectAll(".quadrant-label").data(labelData).enter().append("text").attr("class", "quadrant-label").attr("x", d => d.x).attr("y", d => d.y).attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.name).on("click", (e, d) => { e.stopPropagation(); toggleSpectrumView(d.index, d); });
             const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius - bubbleSizeScale.range()[1]]);
