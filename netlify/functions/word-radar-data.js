@@ -19,7 +19,7 @@ Your process must be methodical and precise. Follow these steps exactly:
 
 **Step 2: Generate Words FOR EACH FACET and Combine**
 -   This step is CRITICAL. You must generate words in batches, one batch for each facet you defined in Step 1.
--   For each facet (e.g., "Formality", "Intensity"), generate from 5 to 10 related words that strongly exemplify that specific semantic dimension.
+-   For EACH facet (e.g., "Formality", "Intensity"), generate up to 10 related words that strongly exemplify that specific semantic dimension.
 -   **ENSURE DIVERSITY**: The final list of words MUST be distributed across all the facets you created. Do not assign all words to a single facet index.
 -   For EACH word, you MUST provide:
     -   \`term\`: The word itself.
@@ -94,7 +94,6 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
         "openai/gpt-oss-20b:free",
         "meta-llama/llama-3.1-8b-instruct",
         "google/gemini-2.0-flash-exp:free",
