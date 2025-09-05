@@ -68,9 +68,9 @@
             background: rgba(255, 107, 71, 0.9);
         }
         .pos-option.selected {
-            background-color: #ffca85;
+            background-color: #FF6B65;
             color: #1a1a2e;
-            border-color: #ffca85;
+            border-color: #FF6B65;
             transform: scale(1.05);
         }
 
@@ -211,7 +211,7 @@
         const containerRect = container.node().getBoundingClientRect();
         const width = containerRect.width;
         const height = containerRect.height;
-        const maxRadius = Math.min(width, height) / 2 - (width < 768 ? 40 : 60);
+        const maxRadius = Math.min(width, height) / 2 - (isMobile ? 55 : 80);
 
         const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
             .on("click", (event) => {
