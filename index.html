@@ -214,7 +214,7 @@
         
         const isMobile = window.innerWidth <= 768;
         
-        const maxRadius = Math.min(width, height) / 2 - (isMobile ? 55 : 80);
+        const maxRadius = Math.min(width, height) / 2 - (isMobile ? 70 : 120);
         
         const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
             .on("click", (event) => {
@@ -345,7 +345,7 @@
             const labelOffset = maxRadius + (isMobile ? 15 : 25);
             const labelData = radarData.facets.map((facet, i) => ({ ...facet, ...[{ x: labelOffset, y: 0, anchor: "start" }, { x: 0, y: labelOffset, anchor: "middle" }, { x: -labelOffset, y: 0, anchor: "end" }, { x: 0, y: -labelOffset, anchor: "middle" }][i], index: i }));
             labelsGroup.selectAll(".quadrant-label").data(labelData).enter().append("text").attr("class", "quadrant-label").attr("x", d => d.x).attr("y", d => d.y).attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.name).on("click", (e, d) => { e.stopPropagation(); toggleSpectrumView(d.index, d); });
-            const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius]);
+            const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius - bubbleSizeScale.range()[1]]);
             const nodes = radarData.words.map(d => {
                 const r = ringScale(d.ring + 0.5) + (Math.random() - 0.5) * (maxRadius / radarData.rings.length) * 0.5;
                 const angle = (d.facet * (Math.PI / 2)) + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
