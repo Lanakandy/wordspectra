@@ -68,9 +68,9 @@
             background: rgba(255, 107, 71, 0.9);
         }
         .pos-option.selected {
-            background-color: #FF6B65;
+            background-color: #FF6B47;
             color: #1a1a2e;
-            border-color: #FF6B65;
+            border-color: #FF6B47;
             transform: scale(1.05);
         }
 
@@ -211,8 +211,11 @@
         const containerRect = container.node().getBoundingClientRect();
         const width = containerRect.width;
         const height = containerRect.height;
+        
+        const isMobile = window.innerWidth <= 768;
+        
         const maxRadius = Math.min(width, height) / 2 - (isMobile ? 55 : 80);
-
+        
         const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
             .on("click", (event) => {
                 if (selectedWords.length > 0) { clearComparison(); } 
@@ -224,7 +227,6 @@
         let currentView = 'radar', activeFacetIndex = null, currentBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null;
 
         const facetColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
-        const isMobile = window.innerWidth <= 768;
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [6, 20] : [10, 30]);
         const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-maxRadius * 0.8, maxRadius * 0.8]);
 
