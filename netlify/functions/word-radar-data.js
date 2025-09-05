@@ -5,26 +5,25 @@ const fetch = require('node-fetch');
 /**
  * Generates the system and user prompts for the LLM.
  * This is the core logic for the Word Radar data generation.
+ * --- START: MODIFICATION ---
+ * The function now accepts partOfSpeech and a category to create a more focused prompt.
  */
-function getLLMPrompt(word) {
+function getLLMPrompt(word, partOfSpeech, category) {
     const systemPrompt = `
-You are a brilliant computational linguist and data visualization expert. Your task is to analyze a central English word and generate a complete JSON dataset for a 'Word Radar' visualization.
+You are a brilliant computational linguist and data visualization expert. Your task is to analyze a central English word for a specific part of speech and generate a complete JSON dataset for a 'Word Radar' visualization.
 
 Follow these instructions meticulously:
 
-**Step 1: Determine the Primary Part of Speech**
--   Analyze the central word and identify its single, most common part of speech (e.g., for "watch", choose "verb" over "noun").
--   The entire analysis MUST be based on this single part of speech.
-
-**Step 2: Define 2 to 4 Semantic Facets (The Quadrants)**
--   Choose two, three, or four distinct, meaningful semantic spectra that best describe the nuances of related words. These will be the radar's axes.
+**Step 1: Define 2 to 4 Semantic Facets (The Quadrants)**
+-   Based on the user-provided word and its part of speech, choose two, three, or four distinct, meaningful semantic spectra that best describe the nuances of related words. These will be the radar's axes.
+-   **IMPORTANT**: If the user provides a "Focus Category," you MUST create a facet that directly relates to or incorporates this category. For example, if the category is "Formality", one of your facets must be about formality.
 -   For each facet, provide:
     -   \`name\`: A human-readable title (e.g., "Intensity & Force").
     -   \`key\`: A single, lowercase programmatic key (e.g., "intensity").
     -   \`spectrumLabels\`: A two-element array of strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 (e.g., ["Subtle", "Forceful"]).
 
-**Step 3: Generate 12-16 Related Words (The Bubbles)**
--   Create a list of related English words (synonyms, related concepts) for the determined part of speech.
+**Step 2: Generate 12-16 Related Words (The Bubbles)**
+-   Create a list of related English words (synonyms, related concepts) that match the requested part of speech.
 -   For EACH word, you MUST provide the following attributes:
     -   \`term\`: The word itself.
     -   \`facet\`: The index (0-3) of the facet it belongs to.
@@ -40,7 +39,7 @@ Your entire response MUST be ONLY a single, valid JSON object matching this stru
 \`\`\`json
 {
   "hub_word": "The original word",
-  "part_of_speech": "The most common part of speech, e.g., verb",
+  "part_of_speech": "The user-provided part of speech, e.g., verb",
   "facets": [
     { "name": "e.g., Formality", "key": "formality", "spectrumLabels": ["Casual", "Formal"] },
     { "name": "e.g., Speed", "key": "speed", "spectrumLabels": ["Slow", "Fast"] }
@@ -63,20 +62,25 @@ Your entire response MUST be ONLY a single, valid JSON object matching this stru
 }
 \`\`\`
 `;
-
-    const userPrompt = `Central Word: "${word}"`;
+    // Build the user prompt with the new information
+    let userPrompt = `Central Word: "${word}"\nPart of Speech: "${partOfSpeech}"`;
+    if (category) {
+        userPrompt += `\nFocus Category: "${category}"`;
+    }
     
     return { systemPrompt, userPrompt };
 }
+// --- END: MODIFICATION ---
 
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
-        "google/gemma-3-4b-it", 
         "google/gemini-2.0-flash-exp:free", 
-        "mistralai/mistral-small-3.2-24b-instruct:free"
+        "mistralai/mistral-small-3.2-24b-instruct:free",
+        "google/gemma-3-4b-it", 
+               
     ];
 
     for (const model of modelsToTry) {
@@ -128,13 +132,15 @@ exports.handler = async function(event) {
 
     try {
         const body = JSON.parse(event.body);
-        const { word } = body;
+        // --- START: MODIFICATION ---
+        const { word, partOfSpeech, category } = body; // category is optional
         
-        if (!word) {
-            return { statusCode: 400, body: JSON.stringify({ error: "Word is required." }) };
+        if (!word || !partOfSpeech) {
+            return { statusCode: 400, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         }
 
-        const { systemPrompt, userPrompt } = getLLMPrompt(word);
+        const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category);
+        // --- END: MODIFICATION ---
         
         const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
         
