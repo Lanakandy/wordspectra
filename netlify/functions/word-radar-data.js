@@ -7,79 +7,40 @@ const fetch = require('node-fetch');
  * This is the core logic for the Word Radar data generation.
  */
 function getLLMPrompt(word, partOfSpeech, category) {
-    const systemPrompt = `
-You are a linguist and data visualization expert. Your task is to analyze a central English word and generate a complete JSON dataset for a 'Word Radar' visualization to provide nuanced understanding of English synonyms and synonymous expressions.
+    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. Generate a JSON object analyzing semantic relationships for the given word.
 
-Your process must be methodical and precise. Follow these steps exactly:
+REQUIREMENTS:
+1. Create 3-4 semantic facets (axes) based on the word's meaning
+2. If a Focus Category is provided, one facet MUST relate to it
+3. Generate 15-25 related words distributed across ALL facets
+4. Each word needs: term, facet index, ring (0-3), frequency (0-100), definition, example, and intensity scores
 
-**Step 1: Define 2 to 4 Semantic Facets (The Quadrants)**
--   Based on the user-provided word and part of speech, choose two, three, or four distinct, meaningful semantic spectra. These will be the radar's axes.
--   **IMPORTANT**: If the user provides a "Focus Category," you MUST create a facet that directly relates to it.
--   For each facet, define its \`name\`, \`key\`, and \`spectrumLabels\`.
+FACET DISTRIBUTION RULE: Words must be spread across facets. Do not assign all words to one facet.
 
-**Step 2: Generate Words FOR EACH FACET and Combine**
--   This step is CRITICAL. You must generate words in batches, one batch for each facet you defined in Step 1.
--   For EACH facet (e.g., "Formality", "Intensity"), generate up to 10 related words that strongly exemplify that specific semantic dimension.
--   **ENSURE DIVERSITY**: The final list of words MUST be distributed across all the facets you created. Do not assign all words to a single facet index.
--   For EACH word, you MUST provide:
-    -   \`term\`: The word itself.
-    -   \`facet\`: The index (0-3) of the facet it belongs to. This MUST be correct.
-    -   \`ring\`: An index from 0 (most central) to 3 (most peripheral) representing conceptual distance.
-    -   \`frequency\`: An estimated integer from 0 (very rare) to 100 (very common).
-    -   \`definition\`: A concise, one-sentence definition.
-    -   \`example\`: A natural, everyday example sentence.
-    -   \`intensities\`: An object with a score from -1.0 to 1.0 for EACH of the facet keys defined in Step 1.
-
-**Step 3: Final Verification**
--   Before generating the final JSON, mentally review your list of words. Confirm that you have assigned words to multiple different facet indexes (e.g., words with \`"facet": 0\`, \`"facet": 1\`, and \`"facet": 2\`).
-
-**Final JSON Structure:**
-Your entire response MUST be ONLY a single, valid JSON object. Do not include any text outside the JSON. The 'words' array should contain a mix of words from all created facets.
-
-\`\`\`json
+JSON Structure:
 {
-  "hub_word": "The original word",
-  "part_of_speech": "The user-provided part of speech, e.g., verb",
+  "hub_word": "original word",
+  "part_of_speech": "provided part of speech", 
   "facets": [
-    { "name": "e.g., Speed & Pace", "key": "speed", "spectrumLabels": ["Leisurely", "Hurried"] },
-    { "name": "e.g., Formality & Purpose", "key": "formality", "spectrumLabels": ["Casual", "Official"] },
-    { "name": "e.g., Difficulty of Terrain", "key": "terrain", "spectrumLabels": ["Easy", "Difficult"] }
+    {"name": "Semantic Dimension", "key": "dimension_key", "spectrumLabels": ["Low End", "High End"]}
   ],
   "rings": ["Core", "Common", "Specific", "Nuanced"],
   "words": [
     {
-      "term": "stroll",
+      "term": "example",
       "facet": 0,
       "ring": 1,
-      "frequency": 45,
-      "definition": "To walk in a leisurely way.",
-      "example": "They strolled through the park on Sunday afternoon.",
-      "intensities": { "speed": -0.8, "formality": -0.4, "terrain": -0.5 }
-    },
-    {
-      "term": "march",
-      "facet": 1,
-      "ring": 2,
-      "frequency": 30,
-      "definition": "To walk in a military manner with a regular measured tread.",
-      "example": "The soldiers marched in perfect formation.",
-      "intensities": { "speed": 0.3, "formality": 0.9, "terrain": 0.1 }
-    },
-    {
-      "term": "hike",
-      "facet": 2,
-      "ring": 2,
-      "frequency": 55,
-      "definition": "To walk for a long distance, especially across country or in the woods.",
-      "example": "We plan to hike the entire trail next summer.",
-      "intensities": { "speed": -0.2, "formality": -0.6, "terrain": 0.8 }
+      "frequency": 65,
+      "definition": "Brief, clear definition.",
+      "example": "Natural usage example.",
+      "intensities": {"dimension_key": 0.5, "other_key": -0.3}
     }
   ]
 }
-\`\`\`
-`;
-    // Build the user prompt with the new information
-    let userPrompt = `Central Word: "${word}"\nPart of Speech: "${partOfSpeech}"`;
+
+Return ONLY valid JSON.`;
+
+    let userPrompt = `Word: "${word}"\nPart of Speech: "${partOfSpeech}"`;
     if (category) {
         userPrompt += `\nFocus Category: "${category}"`;
     }
@@ -87,18 +48,16 @@ Your entire response MUST be ONLY a single, valid JSON object. Do not include an
     return { systemPrompt, userPrompt };
 }
 
-// ... (the rest of the file, callOpenRouterWithFallback and handler, remains exactly the same) ...
-
+// Rest of the file remains the same
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('API key is not configured.');
 
     const modelsToTry = [
         "mistralai/mistral-7b-instruct:free",
-        "google/gemini-2.0-flash-exp:free",
+        "google/gemini-2.0-flash-exp:free", 
         "mistralai/mistral-small-3.2-24b-instruct:free",
         "google/gemini-flash-1.5-8b"
-        
     ];
 
     for (const model of modelsToTry) {
