@@ -74,10 +74,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
         try {
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
-                // --- START: CORRECTION ---
-                // The colon ':' was missing after 'headers'
                 headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
-                // --- END: CORRECTION ---
                 body: JSON.stringify({
                     model: model, response_format: { type: "json_object" },
                     messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }]
@@ -113,6 +110,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
+
 async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) {
     const store = getDeployStore("word-radar-cache");
     const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
@@ -124,7 +122,10 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) 
     }
 
     console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
-    const { systemPrompt, userPrompt } = getLLMPrompt(word, part ofSpeech, category, synonyms);
+    // --- START: CORRECTION ---
+    // The variable 'part ofSpeech' had a space in it. It is now corrected to 'partOfSpeech'.
+    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
+    // --- END: CORRECTION ---
     const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
     
     await store.setJSON(cacheKey, apiResponse);
@@ -132,6 +133,7 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) 
     
     return apiResponse;
 }
+
 
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
