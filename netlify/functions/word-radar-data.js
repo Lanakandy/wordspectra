@@ -2,45 +2,11 @@
 
 const fetch = require('node-fetch');
 
-/**
- * Fetches synonyms from the Merriam-Webster Collegiate Thesaurus API.
- * @param {string} word The word to look up.
- * @param {string} apiKey Your MW Thesaurus API key.
- * @returns {Promise<string[]>} A promise that resolves to an array of unique synonyms.
- */
-async function fetchSynonyms(word, apiKey) {
-    if (!apiKey) {
-        throw new Error('Merriam-Webster API key is not configured.');
-    }
-    const url = `https://www.dictionaryapi.com/api/v3/references/thesaurus/json/${encodeURIComponent(word)}?key=${apiKey}`;
-    console.log(`Fetching synonyms for "${word}" from MW API.`);
-    const response = await fetch(url);
+// fetchSynonyms function is no longer needed as we'll parse senses directly.
+// getLLMPrompt and callOpenRouterWithFallback remain the same.
 
-    if (!response.ok) {
-        throw new Error(`Merriam-Webster API request failed with status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (!Array.isArray(data) || data.length === 0 || typeof data[0] !== 'object') {
-        console.log(`No valid synonym entries found for "${word}".`);
-        return [];
-    }
-
-    const allSynonyms = data.flatMap(entry => entry.meta?.syns?.flat() || []);
-    
-    const uniqueSynonyms = [...new Set(allSynonyms)];
-    console.log(`Found ${uniqueSynonyms.length} unique synonyms. Capping at 25.`);
-    return uniqueSynonyms.slice(0, 25);
-}
-
-
-/**
- * Generates the system and user prompts for the LLM, now including a list of synonyms.
- * The LLM's task is to FILTER and CLASSIFY the provided words.
- */
+// --- (Paste the existing getLLMPrompt and callOpenRouterWithFallback functions here) ---
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
-    // --- START: MODIFICATION ---
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
 REQUIREMENTS:
@@ -72,7 +38,6 @@ JSON Structure:
 }
 
 Return ONLY valid JSON.`;
-    // --- END: MODIFICATION ---
 
     let userPrompt = `Hub Word: "${word}"\nPart of Speech: "${partOfSpeech}"\n\nSynonyms to filter and classify:\n[${synonyms.map(s => `"${s}"`).join(', ')}]`;
     
@@ -83,18 +48,17 @@ Return ONLY valid JSON.`;
     return { systemPrompt, userPrompt };
 }
 
-
-// This function remains the same as before
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.');
 
     const modelsToTry = [
         "openrouter/sonoma-sky-alpha",
+        "openrouter/sonoma-dusk-alpha",
+        "mistralai/mistral-small-3.2-24b-instruct:free",
         "openai/gpt-oss-120b:free",
-        "openai/gpt-oss-20b:free",
         "google/gemini-flash-1.5-8b"
- 
+                
     ];
 
     for (const model of modelsToTry) {
@@ -104,8 +68,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    model: model,
-                    response_format: { type: "json_object" },
+                    model: model, response_format: { type: "json_object" },
                     messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }]
                 })
             });
@@ -139,6 +102,8 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
+
+// --- START: MODIFIED HANDLER ---
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
@@ -146,33 +111,68 @@ exports.handler = async function(event) {
 
     try {
         const body = JSON.parse(event.body);
-        const { word, partOfSpeech, category } = body;
+        const { word, partOfSpeech, category, synonyms } = body; // Check for incoming synonyms list
         
         if (!word || !partOfSpeech) {
             return { statusCode: 400, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         }
         
+        // --- WORKFLOW 2: GENERATION ---
+        // If a list of synonyms is provided, skip discovery and generate the radar
+        if (synonyms && synonyms.length > 0) {
+            console.log("Received pre-selected synonyms. Generating radar...");
+            const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
+            const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
+            apiResponse.hub_word = word;
+            apiResponse.part_of_speech = partOfSpeech;
+            return { statusCode: 200, body: JSON.stringify(apiResponse) };
+        }
+
+        // --- WORKFLOW 1: DISCOVERY ---
+        // If no synonyms are provided, discover the senses of the word
+        console.log(`Discovering senses for "${word}"...`);
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
-        const synonyms = await fetchSynonyms(word, MW_API_KEY);
+        const url = `https://www.dictionaryapi.com/api/v3/references/thesaurus/json/${encodeURIComponent(word)}?key=${MW_API_KEY}`;
+        const response = await fetch(url);
+
+        if (!response.ok) throw new Error(`MW API request failed: ${response.status}`);
         
-        if (synonyms.length === 0) {
-            return { 
-                statusCode: 404, 
-                body: JSON.stringify({ error: `No synonyms found for "${word}". Please try another word.` }) 
-            };
+        const data = await response.json();
+        if (!Array.isArray(data) || data.length === 0 || typeof data[0] !== 'object') {
+            return { statusCode: 404, body: JSON.stringify({ error: `No entries found for "${word}".` }) };
         }
         
-        const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
+        // Filter entries by the correct part of speech and extract senses
+        const senses = data
+            .filter(entry => entry.fl === partOfSpeech)
+            .map(entry => ({
+                definition: entry.shortdef[0] || "General sense",
+                synonyms: [...new Set(entry.meta.syns.flat())].slice(0, 25)
+            }))
+            .filter(sense => sense.synonyms.length > 0);
+
+        if (senses.length === 0) {
+            return { statusCode: 404, body: JSON.stringify({ error: `No synonyms found for "${word}" as a ${partOfSpeech}.` }) };
+        }
         
-        const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
-        
-        apiResponse.hub_word = word;
-        apiResponse.part_of_speech = partOfSpeech;
-        
-        return { statusCode: 200, body: JSON.stringify(apiResponse) };
+        // OPTIMIZATION: If only one sense is found, just generate the radar directly
+        if (senses.length === 1) {
+            console.log("Only one sense found. Generating radar directly.");
+            const singleSenseSynonyms = senses[0].synonyms;
+            const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, singleSenseSynonyms);
+            const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
+            apiResponse.hub_word = word;
+            apiResponse.part_of_speech = partOfSpeech;
+            return { statusCode: 200, body: JSON.stringify(apiResponse) };
+        }
+
+        // If multiple senses exist, return them to the user for selection
+        console.log(`Found ${senses.length} senses. Returning for user selection.`);
+        return { statusCode: 200, body: JSON.stringify({ senses }) };
 
     } catch (error) {
         console.error("Function Error:", error);
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
+// --- END: MODIFIED HANDLER ---
