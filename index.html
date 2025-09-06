@@ -225,11 +225,13 @@
 
         const facetColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
         
-        // --- START: MODIFICATION 2 (Make Bubble Sizes More Prominent) ---
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 24] : [8, 38]);
-        // --- END: MODIFICATION 2 ---
-
-        const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-maxRadius * 0.8, maxRadius * 0.8]);
+        
+        // --- START: MODIFICATION 1 (Spectrum Overlap Fix) ---
+        const largestBubbleRadius = bubbleSizeScale.range()[1];
+        const spectrumRange = maxRadius * 0.8;
+        const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]);
+        // --- END: MODIFICATION 1 ---
 
         const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
         const spectrumGroup = chartGroup.append("g").attr("class", "spectrum-view").style("opacity", 0).attr("pointer-events", "none");
@@ -334,7 +336,10 @@
         }
 
         function drawWordBubbles(radarData) {
-            const labelOffset = maxRadius + (isMobile ? 30 : 50);
+            // --- START: MODIFICATION 2 (Label Cutoff Fix) ---
+            const labelOffset = maxRadius + (isMobile ? 15 : 25);
+            // --- END: MODIFICATION 2 ---
+            
             const labelData = radarData.facets.map((facet, i) => ({ ...facet, ...[{ x: labelOffset, y: 0, anchor: "start" }, { x: 0, y: labelOffset, anchor: "middle" }, { x: -labelOffset, y: 0, anchor: "end" }, { x: 0, y: -labelOffset, anchor: "middle" }][i], index: i }));
             labelsGroup.selectAll(".quadrant-label").data(labelData).enter().append("text").attr("class", "quadrant-label").attr("x", d => d.x).attr("y", d => d.y).attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.name).on("click", (e, d) => { e.stopPropagation(); toggleSpectrumView(d.index, d); });
             const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius - bubbleSizeScale.range()[1]]);
@@ -426,12 +431,10 @@
 
         function speak(text, lang = 'en-US') { if ('speechSynthesis' in window && isSoundOn) { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; window.speechSynthesis.speak(u); } }
 
-        // --- START: MODIFICATION 1 (Remove Frequency from Tooltip) ---
         function setupTooltipEvents(selection) {
             selection.on("click", handleWordClick).on("mouseover", (event, d) => {
                 if (selectedWords.length > 0) return; speak(d.term);
                 tooltip.transition().duration(200).style("opacity", .95);
-                // The 'meta' variable containing frequency has been removed.
                 tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>`);
                 const r = tooltip.node().getBoundingClientRect(); let l = event.pageX + 15, t = event.pageY - 28;
                 if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15;
@@ -440,7 +443,6 @@
                 tooltip.style("left", l + "px").style("top", t + "px");
             }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } });
         }
-        // --- END: MODIFICATION 1 ---
         
         function updateLegend(facets) {
             const legendItemsContainer = d3.select("#legend-items-container");
