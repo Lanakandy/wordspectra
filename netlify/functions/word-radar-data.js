@@ -1,7 +1,10 @@
 // netlify/functions/word-radar-data.js
 
 const fetch = require('node-fetch');
-const { getDeployStore } = require('@netlify/blobs');
+// --- START: MODIFICATION ---
+// Import BOTH getStore (for local dev) and getDeployStore (for production)
+const { getStore, getDeployStore } = require('@netlify/blobs');
+// --- END: MODIFICATION ---
 const { createHash } = require('crypto');
 
 function generateCacheKey(object) {
@@ -15,6 +18,7 @@ function generateCacheKey(object) {
     return createHash('sha256').update(str).digest('hex');
 }
 
+// ... (getLLMPrompt and callOpenRouterWithFallback functions remain the same) ...
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
@@ -112,7 +116,20 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
 
 
 async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) {
-    const store = getDeployStore("word-radar-cache");
+    // --- START: MODIFICATION ---
+    // Conditionally get the correct store based on the environment
+    let store;
+    if (process.env.NETLIFY_DEV) {
+        // Use the local file-based store for development
+        console.log("Using local blob store for development.");
+        store = getStore("word-radar-cache");
+    } else {
+        // Use the deployed store for production
+        console.log("Using deployed blob store.");
+        store = getDeployStore("word-radar-cache");
+    }
+    // --- END: MODIFICATION ---
+
     const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
 
     const cachedData = await store.get(cacheKey, { type: "json" });
@@ -122,10 +139,7 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) 
     }
 
     console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
-    // --- START: CORRECTION ---
-    // The variable 'part ofSpeech' had a space in it. It is now corrected to 'partOfSpeech'.
     const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
-    // --- END: CORRECTION ---
     const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
     
     await store.setJSON(cacheKey, apiResponse);
@@ -134,7 +148,7 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) 
     return apiResponse;
 }
 
-
+// ... (exports.handler function remains the same) ...
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
