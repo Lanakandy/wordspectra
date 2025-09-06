@@ -5,19 +5,22 @@
   publish = "/"
   functions = "netlify/functions"
 
-# Configuration for ALL serverless functions.
-# The "*" is a wildcard that applies the settings to every function.
+# --- START OF CORRECTION ---
+# This is the main table for general function settings.
+[functions]
+  # The blobs configuration must be nested under the [functions] table.
+  [functions.blobs]
+    store = "word-radar-cache"
+# --- END OF CORRECTION ---
+
+# This wildcard block for per-function settings is correct and can stay as is.
 [functions."*"]
   # Increase the timeout to 26 seconds.
   timeout = 26
 
 # Redirect rule for Single Page Applications (SPA)
-# This ensures that refreshing the page on any sub-path still loads your app
+# This is also correct.
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[functions.blobs]
-    # "word-radar-cache" is the name of our store. You can name it anything.
-    store = "word-radar-cache"
