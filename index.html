@@ -110,7 +110,50 @@
             transform: scale(1.05);
             background-color: #ffca85;
         }
-
+        #sense-selector {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: rgba(40, 40, 60, 0.95);
+            border: 1px solid #9a9ac8;
+            border-radius: 12px;
+            padding: clamp(20px, 5vw, 30px);
+            max-width: clamp(300px, 80vw, 500px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #sense-title {
+            margin: 0 0 10px 0;
+            font-size: clamp(16px, 4vw, 20px);
+            text-align: center;
+        }
+        #sense-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+        }
+        .sense-option-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #7a7a9f;
+            border-radius: 8px;
+            padding: 12px;
+            color: #e0e0e0;
+            font-size: clamp(14px, 3.5vw, 16px);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+        .sense-option-btn:hover {
+            background: rgba(255, 107, 71, 0.9);
+            border-color: #FF6B47;
+            color: #1a1a2e;
+        }
         @media (max-width: 768px) { 
             #word-input { font-size: 16px; padding: 12px 16px; width: min(80vw, 300px); } 
             #input-container { gap: 12px; }
@@ -201,6 +244,10 @@
             <input type="text" id="category-input" placeholder="Optional category (e.g., complexity)">
         <button id="submit-btn" class="hidden">Start</button>
         </div>
+        <div id="sense-selector" class="hidden">
+        <h3 id="sense-title">Which meaning of "word"?</h3>
+        <div id="sense-options"></div>
+        </div>
         <div id="radar-scanner" class="hidden"></div>
         <div id="legend" class="hidden">
             <h4>Legend</h4>
@@ -218,6 +265,7 @@
         const scanner = d3.select("#radar-scanner");
         const tooltip = d3.select(".tooltip");
         const legend = d3.select("#legend");
+        const senseSelector = d3.select("#sense-selector");
         
         const container = d3.select("#chart-container");
         const containerRect = container.node().getBoundingClientRect();
@@ -254,6 +302,8 @@
         const labelsGroup = chartGroup.append("g").attr("class", "labels-container");
 
         const submitBtn = d3.select("#submit-btn");
+
+        let currentSearch = { word: '', partOfSpeech: '', category: '' };
 
     function updateSubmitButtonState() {
     const word = d3.select("#word-input").property("value").trim();
@@ -301,52 +351,102 @@
         }
         
         async function handleFormSubmit(event) {
-            event.preventDefault();
-            const word = d3.select("#word-input").property("value").trim();
-            const selectedPosNode = d3.select(".pos-option.selected").node();
-            const category = d3.select("#category-input").property("value").trim();
+    event.preventDefault();
+    
+    // Store current search details
+    currentSearch.word = d3.select("#word-input").property("value").trim();
+    const selectedPosNode = d3.select(".pos-option.selected").node();
+    currentSearch.category = d3.select("#category-input").property("value").trim();
 
-            if (!word) { alert("Please enter a word."); return; }
-            if (!selectedPosNode) { alert("Please select a part of speech."); return; }
+    if (!currentSearch.word) { alert("Please enter a word."); return; }
+    if (!selectedPosNode) { alert("Please select a part of speech."); return; }
+    
+    currentSearch.partOfSpeech = selectedPosNode.dataset.pos;
+    
+    if (currentView === 'spectrum') { await switchToRadarView(); }
 
-            const partOfSpeech = selectedPosNode.dataset.pos;
+    mainTitle.style("cursor", "default").text(`Discovering meanings for "${currentSearch.word}"...`);
+    inputContainer.classed("hidden", true);
+    legend.classed("hidden", true);
+    scanner.classed("hidden", false);
+    clearChart();
+    
+    // This is now the DISCOVERY fetch call
+    const discoveryData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category);
+    
+    // Case 1: The response contains senses for the user to choose from
+    if (discoveryData && discoveryData.senses) {
+        scanner.classed("hidden", true);
+        mainTitle.text("Please select a meaning to explore");
+        senseSelector.select("#sense-title").text(`Which meaning of "${currentSearch.word}"?`);
+        
+        const options = senseSelector.select("#sense-options").selectAll("button")
+            .data(discoveryData.senses);
             
-            if (currentView === 'spectrum') { await switchToRadarView(); }
+        options.enter()
+            .append("button")
+            .attr("class", "sense-option-btn")
+            .merge(options)
+            .text(d => `"${d.synonyms[0]}", etc. – ${d.definition}`)
+            .on("click", (e, d) => handleSenseSelection(d.synonyms));
+            
+        options.exit().remove();
+        senseSelector.classed("hidden", false);
 
-            mainTitle.style("cursor", "default").text(`Searching for "${word}" (${partOfSpeech})...`);
-            inputContainer.classed("hidden", true);
-            legend.classed("hidden", true);
-            scanner.classed("hidden", false);
-            clearChart();
-            
-            const wordData = await fetchWordData(word, partOfSpeech, category);
-            currentRadarData = wordData;
-            scanner.classed("hidden", true);
-            
-            if (wordData && wordData.words) {
-                mainTitle.text(`Word Radar: "${wordData.hub_word}"`).style("cursor", "pointer");
-                updateLegend(wordData.facets);
-                drawRadarBackground(wordData.rings);
-                drawWordBubbles(wordData);
-                legend.classed("hidden", false);
-            } else {
-                mainTitle.text(wordData.error || `No data for "${word}". Click to try again.`).style("cursor", "pointer");
-            }
-        }
+    // Case 2: The response is the final radar data (single-sense optimization)
+    } else if (discoveryData && discoveryData.words) {
+        currentRadarData = discoveryData;
+        scanner.classed("hidden", true);
+        mainTitle.text(`Word Radar: "${discoveryData.hub_word}"`).style("cursor", "pointer");
+        updateLegend(discoveryData.facets);
+        drawRadarBackground(discoveryData.rings);
+        drawWordBubbles(discoveryData);
+        legend.classed("hidden", false);
+    
+    // Case 3: An error occurred
+    } else {
+        scanner.classed("hidden", true);
+        mainTitle.text(discoveryData.error || `No data for "${currentSearch.word}". Click to try again.`).style("cursor", "pointer");
+    }
+}
+
+// --- NEW FUNCTION for Handling Sense Selection ---
+async function handleSenseSelection(synonyms) {
+    senseSelector.classed("hidden", true);
+    mainTitle.style("cursor", "default").text(`Generating Radar for "${currentSearch.word}"...`);
+    scanner.classed("hidden", false);
+
+    // This is the GENERATION fetch call, now with the selected synonyms
+    const wordData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category, synonyms);
+    currentRadarData = wordData;
+    scanner.classed("hidden", true);
+
+    if (wordData && wordData.words) {
+        mainTitle.text(`Word Radar: "${wordData.hub_word}"`).style("cursor", "pointer");
+        updateLegend(wordData.facets);
+        drawRadarBackground(wordData.rings);
+        drawWordBubbles(wordData);
+        legend.classed("hidden", false);
+    } else {
+        mainTitle.text(wordData.error || `No data for "${currentSearch.word}". Click to try again.`).style("cursor", "pointer");
+    }
+}
         
         function resetToInitialState() {
-            if (!scanner.classed("hidden")) return;
-            switchToRadarView().then(() => {
-                clearChart();
-                mainTitle.text("Enter a word to build its Radar").style("cursor", "default");
-                inputContainer.classed("hidden", false);
-                legend.classed("hidden", true);
-                
-                d3.select("#word-input").property("value", "").node().focus();
-                d3.select("#category-input").property("value", "");
-                d3.selectAll('.pos-option').classed('selected', false);
-            });
-        }
+    if (!scanner.classed("hidden")) return;
+    switchToRadarView().then(() => {
+        clearChart();
+        mainTitle.text("Enter a word to build its Radar").style("cursor", "default");
+        inputContainer.classed("hidden", false);
+        senseSelector.classed("hidden", true); // Also hide the sense selector
+        legend.classed("hidden", true);
+        
+        d3.select("#word-input").property("value", "").node().focus();
+        d3.select("#category-input").property("value", "");
+        d3.selectAll('.pos-option').classed('selected', false);
+        d3.select("#submit-btn").classed("hidden", true);
+    });
+}
         
         function drawRadarBackground(rings = []) {
             radarBgGroup.selectAll("*").remove(); 
@@ -542,29 +642,34 @@
             });
         }
 
-        async function fetchWordData(word, partOfSpeech, category) {
-            try {
-                const response = await fetch('/.netlify/functions/word-radar-data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ word, partOfSpeech, category })
-                });
-                if (!response.ok) {
-                    let errorMessage;
-                    try {
-                        const errorData = await response.json();
-                        errorMessage = errorData.error || `Server Error: ${response.status}`;
-                    } catch (e) {
-                        errorMessage = `Server responded with status ${response.status}. The function may have timed out.`;
-                    }
-                    throw new Error(errorMessage);
-                }
-                return await response.json();
-            } catch (error) {
-                console.error("Failed to fetch word data:", error);
-                return { error: error.message };
-            }
+        async function fetchWordData(word, partOfSpeech, category, synonyms = null) { // Add optional synonyms param
+    try {
+        const requestBody = { word, partOfSpeech, category };
+        if (synonyms) {
+            requestBody.synonyms = synonyms; // Include synonyms in the body if they exist
         }
+
+        const response = await fetch('/.netlify/functions/word-radar-data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        if (!response.ok) {
+            let errorMessage;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || `Server Error: ${response.status}`;
+            } catch (e) {
+                errorMessage = `Server responded with status ${response.status}. The function may have timed out.`;
+            }
+            throw new Error(errorMessage);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Failed to fetch word data:", error);
+        return { error: error.message };
+    }
+}
     });
     </script>
 </body>
