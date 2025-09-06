@@ -1,11 +1,31 @@
 // netlify/functions/word-radar-data.js
 
 const fetch = require('node-fetch');
+// --- NEW: Import Netlify Blobs and Node's crypto library ---
+const { getDeployStore } = require('@netlify/blobs');
+const { createHash } = require('crypto');
 
-// fetchSynonyms function is no longer needed as we'll parse senses directly.
-// getLLMPrompt and callOpenRouterWithFallback remain the same.
+/**
+ * --- NEW: Generates a stable SHA256 hash for a given object ---
+ * This creates a unique and consistent key for our cache.
+ * @param {object} object - The object to hash.
+ * @returns {string} A SHA256 hash string.
+ */
+function generateCacheKey(object) {
+    // Sorting the keys ensures that {a:1, b:2} and {b:2, a:1} produce the same hash
+    const ordered = Object.keys(object)
+        .sort()
+        .reduce((obj, key) => {
+            obj[key] = object[key];
+            return obj;
+        }, {});
+    const str = JSON.stringify(ordered);
+    return createHash('sha256').update(str).digest('hex');
+}
 
-// --- (Paste the existing getLLMPrompt and callOpenRouterWithFallback functions here) ---
+
+// (Your existing getLLMPrompt and callOpenRouterWithFallback functions remain unchanged)
+// --- PASTE getLLMPrompt and callOpenRouterWithFallback functions here ---
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
@@ -58,7 +78,6 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
         "mistralai/mistral-small-3.2-24b-instruct:free",
         "openai/gpt-oss-120b:free",
         "google/gemini-flash-1.5-8b"
-                
     ];
 
     for (const model of modelsToTry) {
@@ -66,7 +85,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
         try {
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
-                headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+                headers { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
                 body: JSON.stringify({
                     model: model, response_format: { type: "json_object" },
                     messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }]
@@ -103,7 +122,40 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
 }
 
 
-// --- START: MODIFIED HANDLER ---
+
+/**
+ * --- NEW: A wrapper function for getting LLM data that includes caching ---
+ * @param {object} params - The parameters for the LLM call.
+ * @returns {Promise<object>} The JSON response from the cache or the LLM.
+ */
+async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) {
+    // Get access to the blob store we defined in netlify.toml
+    const store = getDeployStore("word-radar-cache");
+    
+    // Generate a unique key based on the exact request parameters
+    const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
+
+    // 1. Check the cache first
+    const cachedData = await store.get(cacheKey, { type: "json" });
+    if (cachedData) {
+        console.log(`CACHE HIT for key: ${cacheKey}`);
+        return cachedData;
+    }
+
+    console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
+
+    // 2. If miss, call the LLM
+    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
+    const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
+    
+    // 3. Store the new response in the cache before returning
+    await store.setJSON(cacheKey, apiResponse);
+    console.log(`Stored new response in cache for key: ${cacheKey}`);
+    
+    return apiResponse;
+}
+
+
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
@@ -111,26 +163,21 @@ exports.handler = async function(event) {
 
     try {
         const body = JSON.parse(event.body);
-        const { word, partOfSpeech, category, synonyms } = body; // Check for incoming synonyms list
+        let { word, partOfSpeech, category, synonyms } = body;
         
         if (!word || !partOfSpeech) {
             return { statusCode: 400, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         }
         
-        // --- WORKFLOW 2: GENERATION ---
-        // If a list of synonyms is provided, skip discovery and generate the radar
+        // If synonyms are provided, we go straight to the generation step (with caching)
         if (synonyms && synonyms.length > 0) {
-            console.log("Received pre-selected synonyms. Generating radar...");
-            const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
-            const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
+            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms });
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, body: JSON.stringify(apiResponse) };
         }
 
-        // --- WORKFLOW 1: DISCOVERY ---
-        // If no synonyms are provided, discover the senses of the word
-        console.log(`Discovering senses for "${word}"...`);
+        // Otherwise, it's a discovery request to the MW API
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
         const url = `https://www.dictionaryapi.com/api/v3/references/thesaurus/json/${encodeURIComponent(word)}?key=${MW_API_KEY}`;
         const response = await fetch(url);
@@ -142,7 +189,6 @@ exports.handler = async function(event) {
             return { statusCode: 404, body: JSON.stringify({ error: `No entries found for "${word}".` }) };
         }
         
-        // Filter entries by the correct part of speech and extract senses
         const senses = data
             .filter(entry => entry.fl === partOfSpeech)
             .map(entry => ({
@@ -155,19 +201,14 @@ exports.handler = async function(event) {
             return { statusCode: 404, body: JSON.stringify({ error: `No synonyms found for "${word}" as a ${partOfSpeech}.` }) };
         }
         
-        // OPTIMIZATION: If only one sense is found, just generate the radar directly
         if (senses.length === 1) {
-            console.log("Only one sense found. Generating radar directly.");
-            const singleSenseSynonyms = senses[0].synonyms;
-            const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, singleSenseSynonyms);
-            const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
+            // For single senses, we can also use the caching mechanism
+            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms });
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, body: JSON.stringify(apiResponse) };
         }
 
-        // If multiple senses exist, return them to the user for selection
-        console.log(`Found ${senses.length} senses. Returning for user selection.`);
         return { statusCode: 200, body: JSON.stringify({ senses }) };
 
     } catch (error) {
@@ -175,4 +216,3 @@ exports.handler = async function(event) {
         return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
     }
 };
-// --- END: MODIFIED HANDLER ---
