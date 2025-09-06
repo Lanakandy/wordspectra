@@ -227,11 +227,9 @@
         
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 24] : [8, 38]);
         
-        // --- START: MODIFICATION 1 (Spectrum Overlap Fix) ---
         const largestBubbleRadius = bubbleSizeScale.range()[1];
         const spectrumRange = maxRadius * 0.8;
         const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]);
-        // --- END: MODIFICATION 1 ---
 
         const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
         const spectrumGroup = chartGroup.append("g").attr("class", "spectrum-view").style("opacity", 0).attr("pointer-events", "none");
@@ -336,12 +334,49 @@
         }
 
         function drawWordBubbles(radarData) {
-            // --- START: MODIFICATION 2 (Label Cutoff Fix) ---
             const labelOffset = maxRadius + (isMobile ? 15 : 25);
-            // --- END: MODIFICATION 2 ---
-            
             const labelData = radarData.facets.map((facet, i) => ({ ...facet, ...[{ x: labelOffset, y: 0, anchor: "start" }, { x: 0, y: labelOffset, anchor: "middle" }, { x: -labelOffset, y: 0, anchor: "end" }, { x: 0, y: -labelOffset, anchor: "middle" }][i], index: i }));
-            labelsGroup.selectAll(".quadrant-label").data(labelData).enter().append("text").attr("class", "quadrant-label").attr("x", d => d.x).attr("y", d => d.y).attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.name).on("click", (e, d) => { e.stopPropagation(); toggleSpectrumView(d.index, d); });
+            
+            // --- START: MODIFIED SECTION for Dynamic Label Positioning ---
+            const labels = labelsGroup.selectAll(".quadrant-label")
+                .data(labelData)
+                .enter().append("text")
+                .attr("class", "quadrant-label")
+                .attr("x", d => d.x)
+                .attr("y", d => d.y)
+                .attr("text-anchor", d => d.anchor)
+                .attr("dominant-baseline", "middle")
+                .text(d => d.name)
+                .on("click", (e, d) => { e.stopPropagation(); toggleSpectrumView(d.index, d); });
+
+            // NEW: Add dynamic adjustment logic to prevent clipping
+            labels.each(function(d) {
+                const padding = 5; // 5px safety margin from the edge
+                const leftBoundary = -width / 2 + padding;
+                const rightBoundary = width / 2 - padding;
+                
+                const bbox = this.getBBox();
+                const textElement = d3.select(this);
+
+                // Check left-aligned label (anchor = 'end')
+                if (d.anchor === 'end') {
+                    const overflow = leftBoundary - bbox.x;
+                    if (overflow > 0) {
+                        // Nudge the label to the right by the overflow amount
+                        textElement.attr('x', parseFloat(textElement.attr('x')) + overflow);
+                    }
+                } 
+                // Check right-aligned label (anchor = 'start')
+                else if (d.anchor === 'start') {
+                    const overflow = (bbox.x + bbox.width) - rightBoundary;
+                    if (overflow > 0) {
+                        // Nudge the label to the left by the overflow amount
+                        textElement.attr('x', parseFloat(textElement.attr('x')) - overflow);
+                    }
+                }
+            });
+            // --- END: MODIFIED SECTION ---
+
             const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius - bubbleSizeScale.range()[1]]);
             const nodes = radarData.words.map(d => {
                 const r = ringScale(d.ring + 0.5) + (Math.random() - 0.5) * (maxRadius / radarData.rings.length) * 0.5;
