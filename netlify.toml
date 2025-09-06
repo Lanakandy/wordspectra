@@ -17,3 +17,7 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[functions.blobs]
+    # "word-radar-cache" is the name of our store. You can name it anything.
+    store = "word-radar-cache"
