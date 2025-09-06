@@ -93,6 +93,23 @@
             background: rgba(255, 255, 255, 0.1);
             border-style: solid;
         }
+        #submit-btn {
+            background-color: #FF6B47;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: clamp(14px, 4vw, 16px);
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.2s ease;
+            width: clamp(220px, 60vw, 300px);
+        }
+        #submit-btn:hover {
+            transform: scale(1.05);
+            background-color: #ffca85;
+        }
 
         @media (max-width: 768px) { 
             #word-input { font-size: 16px; padding: 12px 16px; width: min(80vw, 300px); } 
@@ -100,7 +117,6 @@
             .pos-option { padding: 6px 12px; font-size: 12px; }
             #category-input { font-size: 12px; padding: 8px 12px; width: min(80vw, 300px); }
         }
-
 
         .header-logo { position: absolute; top: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); width: clamp(60px, 12vw, 90px); opacity: 1; transition: opacity 0.2s; }
         .header-logo:hover { opacity: 0.7; }
@@ -183,6 +199,7 @@
                 <div class="pos-option" data-pos="adjective">Adjective</div>
             </div>
             <input type="text" id="category-input" placeholder="Optional category (e.g., complexity)">
+        <button id="submit-btn" class="hidden">Generate Radar</button>
         </div>
         <div id="radar-scanner" class="hidden"></div>
         <div id="legend" class="hidden">
@@ -236,6 +253,23 @@
         const bubblesGroup = chartGroup.append("g").attr("class", "bubbles-container");
         const labelsGroup = chartGroup.append("g").attr("class", "labels-container");
 
+        const submitBtn = d3.select("#submit-btn");
+
+    function updateSubmitButtonState() {
+    const word = d3.select("#word-input").property("value").trim();
+    const posSelected = d3.select(".pos-option.selected").node();
+    
+    if (word && posSelected) {
+        submitBtn.classed("hidden", false);
+    } else {
+        submitBtn.classed("hidden", true);
+    }
+}
+
+    submitBtn.on("click", (event) => {
+    event.preventDefault(); // Prevent default button behavior
+    handleFormSubmit(event); // Manually trigger our submit logic
+});
         drawRadarBackground();
         drawSpectrumView();
         
@@ -247,9 +281,12 @@
             }
         });
 
+        d3.select('#word-input').on('input', updateSubmitButtonState);
         d3.selectAll('.pos-option').on('click', function() {
             d3.selectAll('.pos-option').classed('selected', false);
             d3.select(this).classed('selected', true);
+
+        updateSubmitButtonState();
         });
 
         mainTitle.on("click", resetToInitialState);
