@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word Radar Prototype - Enhanced Mobile</title>
+    <title>Word Radar</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body {
@@ -225,7 +225,7 @@
 
         const facetColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
         
-        const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 24] : [8, 38]);
+        const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 22] : [8, 38]);
         
         const largestBubbleRadius = bubbleSizeScale.range()[1];
         const spectrumRange = maxRadius * 0.8;
