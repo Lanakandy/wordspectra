@@ -30,8 +30,8 @@ async function fetchSynonyms(word, apiKey) {
     const allSynonyms = data.flatMap(entry => entry.meta?.syns?.flat() || []);
     
     const uniqueSynonyms = [...new Set(allSynonyms)];
-    console.log(`Found ${uniqueSynonyms.length} unique synonyms. Capping at 25.`);
-    return uniqueSynonyms.slice(0, 25);
+    console.log(`Found ${uniqueSynonyms.length} unique synonyms. Capping at 30.`);
+    return uniqueSynonyms.slice(0, 30);
 }
 
 
