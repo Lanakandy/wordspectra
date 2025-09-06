@@ -1,0 +1,8 @@
+# Dependencies
+node_modules/
+
+# Netlify local development folder (contains build outputs and local cache)
+.netlify/
+
+# Environment variables file (if you have one)
+.env
