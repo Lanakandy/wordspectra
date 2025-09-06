@@ -1,18 +1,10 @@
 // netlify/functions/word-radar-data.js
 
 const fetch = require('node-fetch');
-// --- NEW: Import Netlify Blobs and Node's crypto library ---
 const { getDeployStore } = require('@netlify/blobs');
 const { createHash } = require('crypto');
 
-/**
- * --- NEW: Generates a stable SHA256 hash for a given object ---
- * This creates a unique and consistent key for our cache.
- * @param {object} object - The object to hash.
- * @returns {string} A SHA256 hash string.
- */
 function generateCacheKey(object) {
-    // Sorting the keys ensures that {a:1, b:2} and {b:2, a:1} produce the same hash
     const ordered = Object.keys(object)
         .sort()
         .reduce((obj, key) => {
@@ -23,9 +15,6 @@ function generateCacheKey(object) {
     return createHash('sha256').update(str).digest('hex');
 }
 
-
-// (Your existing getLLMPrompt and callOpenRouterWithFallback functions remain unchanged)
-// --- PASTE getLLMPrompt and callOpenRouterWithFallback functions here ---
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
@@ -85,7 +74,10 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
         try {
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
-                headers { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+                // --- START: CORRECTION ---
+                // The colon ':' was missing after 'headers'
+                headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+                // --- END: CORRECTION ---
                 body: JSON.stringify({
                     model: model, response_format: { type: "json_object" },
                     messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }]
@@ -121,21 +113,10 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
-
-
-/**
- * --- NEW: A wrapper function for getting LLM data that includes caching ---
- * @param {object} params - The parameters for the LLM call.
- * @returns {Promise<object>} The JSON response from the cache or the LLM.
- */
 async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) {
-    // Get access to the blob store we defined in netlify.toml
     const store = getDeployStore("word-radar-cache");
-    
-    // Generate a unique key based on the exact request parameters
     const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
 
-    // 1. Check the cache first
     const cachedData = await store.get(cacheKey, { type: "json" });
     if (cachedData) {
         console.log(`CACHE HIT for key: ${cacheKey}`);
@@ -143,18 +124,14 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) 
     }
 
     console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
-
-    // 2. If miss, call the LLM
-    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
+    const { systemPrompt, userPrompt } = getLLMPrompt(word, part ofSpeech, category, synonyms);
     const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
     
-    // 3. Store the new response in the cache before returning
     await store.setJSON(cacheKey, apiResponse);
     console.log(`Stored new response in cache for key: ${cacheKey}`);
     
     return apiResponse;
 }
-
 
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
@@ -169,7 +146,6 @@ exports.handler = async function(event) {
             return { statusCode: 400, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         }
         
-        // If synonyms are provided, we go straight to the generation step (with caching)
         if (synonyms && synonyms.length > 0) {
             const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms });
             apiResponse.hub_word = word;
@@ -177,7 +153,6 @@ exports.handler = async function(event) {
             return { statusCode: 200, body: JSON.stringify(apiResponse) };
         }
 
-        // Otherwise, it's a discovery request to the MW API
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
         const url = `https://www.dictionaryapi.com/api/v3/references/thesaurus/json/${encodeURIComponent(word)}?key=${MW_API_KEY}`;
         const response = await fetch(url);
@@ -202,7 +177,6 @@ exports.handler = async function(event) {
         }
         
         if (senses.length === 1) {
-            // For single senses, we can also use the caching mechanism
             const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms });
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
