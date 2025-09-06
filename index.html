@@ -20,7 +20,6 @@
             padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         }
 
-        /* --- START: MODIFICATION (New Styles for Inputs) --- */
         #input-container { 
             position: absolute; 
             top: 50%; 
@@ -101,10 +100,8 @@
             .pos-option { padding: 6px 12px; font-size: 12px; }
             #category-input { font-size: 12px; padding: 8px 12px; width: min(80vw, 300px); }
         }
-        /* --- END: MODIFICATION --- */
 
 
-        /* --- (All other existing styles remain the same) --- */
         .header-logo { position: absolute; top: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); width: clamp(60px, 12vw, 90px); opacity: 1; transition: opacity 0.2s; }
         .header-logo:hover { opacity: 0.7; }
         #sound-toggle { position: absolute; top: clamp(10px, 2vh, 20px); right: clamp(10px, 2vw, 20px); left: auto; background: rgba(40, 40, 60, 0.9); border: 1px solid #9a9ac8; border-radius: 8px; padding: 6px 10px; display: flex; align-items: center; cursor: pointer; backdrop-filter: blur(5px); transition: background-color 0.2s; z-index: 100; }
@@ -176,7 +173,6 @@
 
     <h1 id="main-title">Enter a word to build its Radar</h1>
     <div id="chart-container">
-        <!-- --- START: MODIFICATION (Updated Input Form) --- -->
         <div id="input-container">
             <form id="word-form">
                 <input type="text" id="word-input" placeholder="e.g., see" autocomplete="off">
@@ -188,7 +184,6 @@
             </div>
             <input type="text" id="category-input" placeholder="Optional category (e.g., complexity)">
         </div>
-        <!-- --- END: MODIFICATION --- -->
         <div id="radar-scanner" class="hidden"></div>
         <div id="legend" class="hidden">
             <h4>Legend</h4>
@@ -229,7 +224,11 @@
         let currentView = 'radar', activeFacetIndex = null, currentBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null;
 
         const facetColors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'];
-        const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [6, 20] : [10, 30]);
+        
+        // --- START: MODIFICATION 2 (Make Bubble Sizes More Prominent) ---
+        const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 24] : [8, 38]);
+        // --- END: MODIFICATION 2 ---
+
         const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-maxRadius * 0.8, maxRadius * 0.8]);
 
         const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
@@ -240,10 +239,8 @@
         drawRadarBackground();
         drawSpectrumView();
         
-        // --- START: MODIFICATION (Setup New Input Listeners) ---
         wordForm.on("submit", handleFormSubmit);
         
-        // Also trigger form submission if user hits Enter in the category input
         d3.select('#category-input').on('keydown', function(event) {
             if (event.key === 'Enter') {
                 handleFormSubmit(event);
@@ -254,7 +251,6 @@
             d3.selectAll('.pos-option').classed('selected', false);
             d3.select(this).classed('selected', true);
         });
-        // --- END: MODIFICATION ---
 
         mainTitle.on("click", resetToInitialState);
         setupSoundToggle();
@@ -267,7 +263,6 @@
             });
         }
         
-        // --- START: MODIFICATION (Update handleFormSubmit) ---
         async function handleFormSubmit(event) {
             event.preventDefault();
             const word = d3.select("#word-input").property("value").trim();
@@ -287,7 +282,7 @@
             scanner.classed("hidden", false);
             clearChart();
             
-            const wordData = await fetchWordData(word, partOfSpeech, category); // Pass all data
+            const wordData = await fetchWordData(word, partOfSpeech, category);
             currentRadarData = wordData;
             scanner.classed("hidden", true);
             
@@ -301,9 +296,7 @@
                 mainTitle.text(wordData.error || `No data for "${word}". Click to try again.`).style("cursor", "pointer");
             }
         }
-        // --- END: MODIFICATION ---
         
-        // --- START: MODIFICATION (Update resetToInitialState) ---
         function resetToInitialState() {
             if (!scanner.classed("hidden")) return;
             switchToRadarView().then(() => {
@@ -312,13 +305,11 @@
                 inputContainer.classed("hidden", false);
                 legend.classed("hidden", true);
                 
-                // Clear all input fields
                 d3.select("#word-input").property("value", "").node().focus();
                 d3.select("#category-input").property("value", "");
                 d3.selectAll('.pos-option').classed('selected', false);
             });
         }
-        // --- END: MODIFICATION ---
         
         function drawRadarBackground(rings = []) {
             radarBgGroup.selectAll("*").remove(); 
@@ -334,9 +325,8 @@
             }
         }
         
-        /* The drawSpectrumView() function had a minor bug where text alignment wasn't perfect. I've corrected it here. */
         function drawSpectrumView() {
-            spectrumGroup.selectAll("*").remove(); // Clear previous elements
+            spectrumGroup.selectAll("*").remove();
             spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
             const labelPadding = isMobile ? 12 : 25;
             spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-left").attr("x", -maxRadius * 0.9 - labelPadding).attr("text-anchor", "end").attr("dominant-baseline", "middle");
@@ -436,12 +426,13 @@
 
         function speak(text, lang = 'en-US') { if ('speechSynthesis' in window && isSoundOn) { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; window.speechSynthesis.speak(u); } }
 
+        // --- START: MODIFICATION 1 (Remove Frequency from Tooltip) ---
         function setupTooltipEvents(selection) {
             selection.on("click", handleWordClick).on("mouseover", (event, d) => {
                 if (selectedWords.length > 0) return; speak(d.term);
                 tooltip.transition().duration(200).style("opacity", .95);
-                let meta = `<div class="metadata"><strong>Frequency:</strong> ${d.frequency}/100</div>`;
-                tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>${meta}`);
+                // The 'meta' variable containing frequency has been removed.
+                tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>`);
                 const r = tooltip.node().getBoundingClientRect(); let l = event.pageX + 15, t = event.pageY - 28;
                 if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15;
                 if (t + r.height > window.innerHeight) t = event.pageY - r.height - 15;
@@ -449,6 +440,7 @@
                 tooltip.style("left", l + "px").style("top", t + "px");
             }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } });
         }
+        // --- END: MODIFICATION 1 ---
         
         function updateLegend(facets) {
             const legendItemsContainer = d3.select("#legend-items-container");
@@ -476,13 +468,12 @@
             });
         }
 
-        // --- START: MODIFICATION (Update fetchWordData to send new data) ---
         async function fetchWordData(word, partOfSpeech, category) {
             try {
                 const response = await fetch('/.netlify/functions/word-radar-data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ word, partOfSpeech, category }) // Send all three fields
+                    body: JSON.stringify({ word, partOfSpeech, category })
                 });
                 if (!response.ok) {
                     let errorMessage;
@@ -500,7 +491,6 @@
                 return { error: error.message };
             }
         }
-        // --- END: MODIFICATION ---
     });
     </script>
 </body>
