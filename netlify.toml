@@ -1,21 +1,13 @@
-# --- Corrected and Final netlify.toml ---
-
-# Build settings
 [build]
   publish = "/"
   functions = "netlify/functions"
 
-# Enable the blob store for ALL functions.
-# This is a specific configuration table.
 [functions.blobs]
   store = "word-radar-cache"
 
-# Apply a timeout setting to every individual function.
-# The wildcard "*" makes this a per-function setting.
 [functions."*"]
   timeout = 26
 
-# Redirect rule for SPA
 [[redirects]]
   from = "/*"
   to = "/index.html"
