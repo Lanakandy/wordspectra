@@ -1,10 +1,10 @@
 // netlify/functions/word-radar-data.js
 
 const fetch = require('node-fetch');
-// --- START: MODIFICATION FOR LAMBDA COMPATIBILITY ---
-// We need both getStore (for local) and getDeployStore (for production)
-const { getStore, getDeployStore } = require('@netlify/blobs');
-// --- END: MODIFICATION FOR LAMBDA COMPATIBILITY ---
+// --- START: FINAL FIX ---
+// Import ONLY getStore. It works for both local dev and the modern production runtime.
+const { getStore } = require('@netlify/blobs');
+// --- END: FINAL FIX ---
 const { createHash } = require('crypto');
 
 function generateCacheKey(object) {
@@ -19,7 +19,6 @@ function generateCacheKey(object) {
 }
 
 // ... (getLLMPrompt and callOpenRouterWithFallback functions remain the same) ...
-// (No changes needed in the prompt or API call functions)
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
@@ -114,26 +113,12 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
 
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
-// --- START: MODIFICATION FOR LAMBDA COMPATIBILITY ---
-// The context object must be passed down to this function.
-async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, context) {
-    let store;
-    
-    // For local dev, NETLIFY_DEV is true. Use the simple file-based store.
-    if (process.env.NETLIFY_DEV) {
-        console.log("Using local blob store for development.");
-        store = getStore("word-radar-cache");
-    } else {
-        // For production, we are in Lambda Compatibility mode.
-        // We MUST manually create the store using details from the environment and context.
-        console.log("Using deployed blob store in Lambda Compatibility Mode.");
-        store = getDeployStore({
-            storeName: 'word-radar-cache',
-            siteID: process.env.SITE_ID, // Provided by Netlify's environment
-            token: context.blobs.token,  // Provided by the handler's context object
-        });
-    }
-    // --- END: MODIFICATION FOR LAMBDA COMPATIBILITY ---
+// --- START: FINAL FIX ---
+// The context object is NOT needed.
+async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) {
+    // The getStore function automatically handles both local and deployed environments.
+    const store = getStore("word-radar-cache");
+    // --- END: FINAL FIX ---
 
     const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
 
@@ -153,10 +138,10 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, 
     return apiResponse;
 }
 
-// --- START: MODIFICATION FOR LAMBDA COMPATIBILITY ---
-// The handler function receives a second argument: 'context'.
-exports.handler = async function(event, context) {
-// --- END: MODIFICATION FOR LAMBDA COMPATIBILITY ---
+// --- START: FINAL FIX ---
+// The handler function does not need the 'context' object for blobs.
+exports.handler = async function(event) {
+// --- END: FINAL FIX ---
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -170,10 +155,10 @@ exports.handler = async function(event, context) {
         }
         
         if (synonyms && synonyms.length > 0) {
-            // --- START: MODIFICATION FOR LAMBDA COMPATIBILITY ---
-            // Pass the context object to the caching function.
-            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, context);
-            // --- END: MODIFICATION FOR LAMBDA COMPATIBILITY ---
+            // --- START: FINAL FIX ---
+            // We no longer pass 'context' to this function.
+            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms });
+            // --- END: FINAL FIX ---
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, body: JSON.stringify(apiResponse) };
@@ -203,10 +188,10 @@ exports.handler = async function(event, context) {
         }
         
         if (senses.length === 1) {
-             // --- START: MODIFICATION FOR LAMBDA COMPATIBILITY ---
-            // Pass the context object to the caching function here as well.
-            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms }, context);
-            // --- END: MODIFICATION FOR LAMBDA COMPATIBILITY ---
+             // --- START: FINAL FIX ---
+            // We no longer pass 'context' to this function.
+            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms });
+            // --- END: FINAL FIX ---
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, body: JSON.stringify(apiResponse) };
