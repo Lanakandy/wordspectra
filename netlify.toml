@@ -2,15 +2,11 @@
   publish = "/"
   functions = "netlify/functions"
 
-[build.environment]
-  NODE_VERSION = "18"
-
 [functions.blobs]
   store = "word-radar-cache"
 
 [functions."*"]
   timeout = 26
-  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/*"
