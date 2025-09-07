@@ -179,8 +179,8 @@
         #radar-scanner { position: absolute; top: 5%; left: 50%; margin-left: -1px; width: 2px; height: 45%; background: linear-gradient(to top, rgba(255, 107, 71, 0.8) 0%, rgba(255, 107, 71, 0) 100%); transform-origin: bottom center; animation: spin 3s linear infinite; z-index: 5; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .radar-background, .spectrum-view { transition: opacity 0.5s ease-in-out; }
-        .radar-ring { stroke: #4f4f7a; stroke-width: 1px; }
-        .quadrant-line { stroke: #5f5f8a; stroke-width: 1.5px; }
+        .radar-ring { stroke: #4f4f7a; stroke-width: 1px; transition: r 0.5s ease-out, opacity 0.5s ease-out; }
+        .quadrant-line { stroke: #5f5f8a; stroke-width: 1.5px; transition: all 0.5s ease-out; }
         .ring-label { fill: #6a6a8f; font-size: clamp(10px, 2vw, 12px); font-family: monospace; text-transform: uppercase; pointer-events: none; }
         .quadrant-label { fill: #c0c0e0; font-size: clamp(12px, 3vw, 14px); font-weight: 600; text-transform: uppercase; cursor: pointer; transition: fill 0.2s ease-in-out, opacity 0.5s ease-in-out; }
         .quadrant-label:hover { fill: #ffca85; }
@@ -209,6 +209,22 @@
         .comparison-col p { font-size: clamp(11px, 2.8vw, 13px); }
         .comparison-close { position: absolute; top: 8px; right: 10px; cursor: pointer; font-size: 18px; color: #aaa; }
         .comparison-close:hover { color: white; }
+        
+        /* --- NEW SECTION: Mobile Comparison View --- */
+        @media (max-width: 768px) {
+            .comparison-tooltip {
+                width: 90vw;
+                max-width: 90vw;
+                left: 5vw !important; /* Override JS positioning */
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+            }
+            .comparison-grid {
+                grid-template-columns: 1fr; /* Stack columns vertically */
+                gap: 15px;
+            }
+        }
+        
         #legend { position: absolute; bottom: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); background: rgba(40, 40, 60, 0.9); border: 1px solid #9a9ac8; border-radius: 8px; padding: clamp(10px, 2vw, 15px); font-size: clamp(10px, 2.5vw, 12px); color: #e0e0e0; max-width: clamp(150px, 35vw, 200px); backdrop-filter: blur(5px); transition: opacity 0.5s ease-in-out; }
         #legend h4 { margin: 0 0 8px 0; color: #ffffff; font-size: clamp(12px, 3vw, 14px); }
         #legend .legend-item { margin: 6px 0; display: flex; align-items: center;  cursor: pointer; transition: background-color 0.2s; border-radius: 4px; padding: 2px 4px; margin-left: -4px;  }
@@ -454,17 +470,25 @@ async function handleSenseSelection(synonyms) {
             const ringWidth = maxRadius / ringCount;
             const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e"];
             radarBgGroup.selectAll(".radar-ring").data(d3.range(ringCount - 1, -1, -1)).enter().append("circle").attr("class", "radar-ring").attr("r", d => (d + 1) * ringWidth).style("fill", (d, i) => ringColors[i]);
-            radarBgGroup.append("line").attr("class", "quadrant-line").attr("x1", 0).attr("y1", -maxRadius).attr("x2", 0).attr("y2", maxRadius);
-            radarBgGroup.append("line").attr("class", "quadrant-line").attr("x1", -maxRadius).attr("y1", 0).attr("x2", maxRadius).attr("y2", 0);
+            
+            // --- MODIFIED SECTION: Added IDs for animation ---
+            radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-v").attr("x1", 0).attr("y1", -maxRadius).attr("x2", 0).attr("y2", maxRadius);
+            radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-h").attr("x1", -maxRadius).attr("y1", 0).attr("x2", maxRadius).attr("y2", 0);
+
             if(rings.length > 0) {
                 radarBgGroup.selectAll(".ring-label-path").data(rings).enter().append("path").attr("id", (d, i) => `ring-path-${i}`).attr("d", (d, i) => `M ${-(i + 0.5) * ringWidth}, 0 A ${(i + 0.5) * ringWidth},${(i + 0.5) * ringWidth} 0 0 1 ${(i + 0.5) * ringWidth},0`).style("fill", "none");
                 radarBgGroup.selectAll(".ring-label").data(rings).enter().append("text").attr("class", "ring-label").append("textPath").attr("startOffset", "50%").attr("xlink:href", (d, i) => `#ring-path-${i}`).text(d => d.toUpperCase());
             }
         }
         
+        // --- MODIFIED SECTION: Spectrum View Clarity ---
         function drawSpectrumView() {
             spectrumGroup.selectAll("*").remove();
+            // Horizontal axis
             spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
+            // NEW: Vertical center line for clarity
+            spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", 0).attr("y1", -15).attr("x2", 0).attr("y2", 15);
+
             const labelPadding = isMobile ? 12 : 25;
             spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-left").attr("x", -maxRadius * 0.9 - labelPadding).attr("text-anchor", "end").attr("dominant-baseline", "middle");
             spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-right").attr("x", maxRadius * 0.9 + labelPadding).attr("text-anchor", "start").attr("dominant-baseline", "middle");
@@ -474,7 +498,6 @@ async function handleSenseSelection(synonyms) {
             const labelOffset = maxRadius + (isMobile ? 15 : 25);
             const labelData = radarData.facets.map((facet, i) => ({ ...facet, ...[{ x: labelOffset, y: 0, anchor: "start" }, { x: 0, y: labelOffset, anchor: "middle" }, { x: -labelOffset, y: 0, anchor: "end" }, { x: 0, y: -labelOffset, anchor: "middle" }][i], index: i }));
             
-            // --- START: MODIFIED SECTION for Dynamic Label Positioning ---
             const labels = labelsGroup.selectAll(".quadrant-label")
                 .data(labelData)
                 .enter().append("text")
@@ -486,33 +509,25 @@ async function handleSenseSelection(synonyms) {
                 .text(d => d.name)
                 .on("click", (e, d) => { e.stopPropagation(); toggleSpectrumView(d.index, d); });
 
-            // NEW: Add dynamic adjustment logic to prevent clipping
             labels.each(function(d) {
-                const padding = 5; // 5px safety margin from the edge
+                const padding = 5; 
                 const leftBoundary = -width / 2 + padding;
                 const rightBoundary = width / 2 - padding;
-                
                 const bbox = this.getBBox();
                 const textElement = d3.select(this);
-
-                // Check left-aligned label (anchor = 'end')
                 if (d.anchor === 'end') {
                     const overflow = leftBoundary - bbox.x;
                     if (overflow > 0) {
-                        // Nudge the label to the right by the overflow amount
                         textElement.attr('x', parseFloat(textElement.attr('x')) + overflow);
                     }
                 } 
-                // Check right-aligned label (anchor = 'start')
                 else if (d.anchor === 'start') {
                     const overflow = (bbox.x + bbox.width) - rightBoundary;
                     if (overflow > 0) {
-                        // Nudge the label to the left by the overflow amount
                         textElement.attr('x', parseFloat(textElement.attr('x')) - overflow);
                     }
                 }
             });
-            // --- END: MODIFIED SECTION ---
 
             const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius - bubbleSizeScale.range()[1]]);
             const nodes = radarData.words.map(d => {
@@ -520,7 +535,8 @@ async function handleSenseSelection(synonyms) {
                 const angle = (d.facet * (Math.PI / 2)) + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
                 d.targetX = r * Math.cos(angle); d.targetY = r * Math.sin(angle); return d;
             });
-            const simulation = d3.forceSimulation(nodes).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 3 : 4)).strength(0.8)).force("x", d3.forceX(d => d.targetX).strength(0.1)).force("y", d3.forceY(d => d.targetY).strength(0.1)).stop();
+            // --- MODIFIED SECTION: Increased collide padding to prevent text overlap ---
+            const simulation = d3.forceSimulation(nodes).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 4 : 5)).strength(0.8)).force("x", d3.forceX(d => d.targetX).strength(0.1)).force("y", d3.forceY(d => d.targetY).strength(0.1)).stop();
             for (let i = 0; i < 200; ++i) simulation.tick();
             nodes.forEach(d => { d.radarX = d.x; d.radarY = d.y; });
             currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term).enter().append("g").attr("class", "word-bubble");
@@ -544,14 +560,19 @@ async function handleSenseSelection(synonyms) {
             else { switchToSpectrumView(facetIndex, facetData); }
         }
 
+        // --- MODIFIED SECTION: Animation Polish ---
         function switchToSpectrumView(facetIndex, facetData) {
             currentView = 'spectrum'; activeFacetIndex = facetIndex;
             mainTitle.text(`Spectrum: ${facetData.name}`);
             spectrumGroup.select(".spectrum-label-left").text(facetData.spectrumLabels[0].toUpperCase());
             spectrumGroup.select(".spectrum-label-right").text(facetData.spectrumLabels[1].toUpperCase());
-            spectrumGroup.transition().duration(500).style("opacity", 1).attr("pointer-events", "auto");
+            
+            // NEW: Enhanced animations
             labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
-            radarBgGroup.transition().duration(500).style("opacity", 0);
+            radarBgGroup.selectAll(".radar-ring").transition().duration(500).attr("r", 0).style("opacity", 0);
+            radarBgGroup.selectAll(".quadrant-line, .ring-label, .ring-label-path").transition().duration(300).style("opacity", 0);
+            spectrumGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
+
             const allNodes = currentBubbles.data();
             const facetKey = facetData.key;
             const spectrumSimulation = d3.forceSimulation(allNodes).force("x", d3.forceX(d => spectrumScale(d.intensities[facetKey])).strength(1)).force("y", d3.forceY(0).strength(0.05)).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 2 : 3)).strength(0.8)).stop();
@@ -559,16 +580,25 @@ async function handleSenseSelection(synonyms) {
             currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.x}, ${d.y})`);
         }
 
+        // --- MODIFIED SECTION: Animation Polish ---
         function switchToRadarView() {
             return new Promise(resolve => {
                 if (currentView !== 'spectrum' && activeFacetIndex === null) { resolve(); return; }
                 clearComparison(); currentView = 'radar'; activeFacetIndex = null;
                 mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
                 legend.style("opacity", 1);
+                
+                // NEW: Enhanced animations
                 spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
-                radarBgGroup.transition().duration(500).style("opacity", 1);
+                
+                radarBgGroup.selectAll(".quadrant-line, .ring-label, .ring-label-path").transition().delay(200).duration(500).style("opacity", 1);
+                const ringCount = 4;
+                const ringWidth = maxRadius / ringCount;
+                radarBgGroup.selectAll(".radar-ring").transition().delay((d,i) => 200 + (3-i)*80).duration(500).attr("r", d => (d + 1) * ringWidth).style("opacity", 1);
+
                 labelsGroup.selectAll(".quadrant-label").classed("active", false);
-                labelsGroup.transition().duration(500).style("opacity", 1).attr("pointer-events", "auto");
+                labelsGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
+
                 if (currentBubbles) {
                     currentBubbles.transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.radarX}, ${d.radarY})`).end().then(resolve);
                 } else { resolve(); }
@@ -595,19 +625,38 @@ async function handleSenseSelection(synonyms) {
             currentBubbles.classed("selected", false).classed("dimmed", false);
             tooltip.style("opacity", 0).classed("comparison-tooltip", false);
         }
-
+        
+        // --- MODIFIED SECTION: Show Difficulty in Comparison Tooltip ---
         function showComparisonTooltip(d1, d2) {
-            const content = `<div class="comparison-close" onclick="d3.select('.tooltip').style('opacity', 0); d3.selectAll('.word-bubble').classed('selected dimmed', false); window.selectedWords = [];">×</div><h3>Comparing Words</h3><div class="comparison-grid"><div class="comparison-col"><h4>${d1.term}</h4><p>${d1.definition}</p><div class="example">e.g., "${d1.example}"</div></div><div class="comparison-col"><h4>${d2.term}</h4><p>${d2.definition}</p><div class="example">e.g., "${d2.example}"</div></div></div><div class="metadata"><strong>Tip:</strong> Click the background to clear.</div>`;
-            tooltip.html(content).classed("comparison-tooltip", true).transition().duration(200).style("opacity", 0.95).style("left", `${width / 2 - tooltip.node().getBoundingClientRect().width / 2}px`).style("top", `${height / 2 - tooltip.node().getBoundingClientRect().height / 2}px`);
+            const getDifficultyHTML = (d) => d.difficulty ? `<span class="difficulty ${d.difficulty}">${d.difficulty}</span>` : '';
+            const content = `<div class="comparison-close" onclick="d3.select('.tooltip').style('opacity', 0); d3.selectAll('.word-bubble').classed('selected dimmed', false); window.selectedWords = [];">×</div><h3>Comparing Words</h3><div class="comparison-grid"><div class="comparison-col"><h4>${d1.term}</h4><p>${d1.definition}</p><div class="example">e.g., "${d1.example}"</div><div class="metadata">${getDifficultyHTML(d1)}</div></div><div class="comparison-col"><h4>${d2.term}</h4><p>${d2.definition}</p><div class="example">e.g., "${d2.example}"</div><div class="metadata">${getDifficultyHTML(d2)}</div></div></div><div class="metadata"><strong>Tip:</strong> Click the background to clear.</div>`;
+            
+            tooltip.html(content)
+                .classed("comparison-tooltip", true)
+                .style("opacity", 0) // Start transparent for smooth transition
+                .style("left", null).style("top", null); // Clear JS styles so CSS can take over on mobile
+
+            // Let browser render it once to get dimensions, then transition
+            requestAnimationFrame(() => {
+                tooltip.transition().duration(200).style("opacity", 0.95);
+                if (!isMobile) {
+                    tooltip.style("left", `${width / 2 - tooltip.node().getBoundingClientRect().width / 2}px`)
+                           .style("top", `${height / 2 - tooltip.node().getBoundingClientRect().height / 2}px`);
+                }
+            });
         }
 
         function speak(text, lang = 'en-US') { if ('speechSynthesis' in window && isSoundOn) { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; window.speechSynthesis.speak(u); } }
 
+        // --- MODIFIED SECTION: Show Difficulty in Tooltip ---
         function setupTooltipEvents(selection) {
             selection.on("click", handleWordClick).on("mouseover", (event, d) => {
                 if (selectedWords.length > 0) return; speak(d.term);
                 tooltip.transition().duration(200).style("opacity", .95);
-                tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>`);
+                
+                const difficultyHTML = d.difficulty ? `<div class="metadata"><span class="difficulty ${d.difficulty.toLowerCase()}">${d.difficulty}</span></div>` : '';
+                
+                tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>${difficultyHTML}`);
                 const r = tooltip.node().getBoundingClientRect(); let l = event.pageX + 15, t = event.pageY - 28;
                 if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15;
                 if (t + r.height > window.innerHeight) t = event.pageY - r.height - 15;
