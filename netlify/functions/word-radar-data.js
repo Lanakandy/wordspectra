@@ -4,20 +4,20 @@ const fetch = require('node-fetch');
 const { getStore } = require('@netlify/blobs');
 const { createHash } = require('crypto');
 
-function generateCacheKey(object) {
+// --- MODIFIED SECTION: The cache key now includes the prompt ---
+// This ensures that if we change the prompt, the cache is automatically invalidated.
+function generateCacheKey(object, prompt) {
     const ordered = Object.keys(object)
         .sort()
         .reduce((obj, key) => {
             obj[key] = object[key];
             return obj;
         }, {});
-    const str = JSON.stringify(ordered);
+    const str = JSON.stringify(ordered) + prompt; // Add the prompt text to the string
     return createHash('sha256').update(str).digest('hex');
 }
 
-// --- MODIFIED SECTION: Improved LLM Prompt ---
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
-    // The prompt is updated to explicitly include phrasal verbs in the filtering step.
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
 REQUIREMENTS:
@@ -63,58 +63,33 @@ Return ONLY valid JSON.`;
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.');
-
-    const modelsToTry = [
-        "openrouter/sonoma-sky-alpha",
-        "openrouter/sonoma-dusk-alpha",
-        "mistralai/mistral-small-3.2-24b-instruct:free",
-        "openai/gpt-oss-120b:free",
-        "google/gemini-flash-1.5-8b"
-    ];
-
+    const modelsToTry = [ "openrouter/sonoma-sky-alpha", "openrouter/sonoma-dusk-alpha", "mistralai/mistral-small-3.2-24b-instruct:free", "openai/gpt-oss-120b:free", "google/gemini-flash-1.5-8b" ];
     for (const model of modelsToTry) {
         console.log(`Attempting API call with model: ${model}`);
         try {
             const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: model, response_format: { type: "json_object" },
-                    messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }]
-                })
+                body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] })
             });
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`);
-                continue;
-            }
-
+            if (!response.ok) { const errorBody = await response.text(); console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`); continue; }
             const data = await response.json();
-
-            if (data.choices && data.choices.length > 0 && data.choices[0].message?.content) {
+            if (data.choices && data.choices[0] && data.choices[0].message?.content) {
                 console.log(`Successfully received response from: ${model}`);
-                const messageContent = data.choices[0].message.content;
-                
-                try {
-                    return JSON.parse(messageContent);
-                } catch (parseError) {
-                    console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`);
-                    continue;
-                }
-            } else {
-                console.warn(`Model '${model}' returned no choices. Trying next model.`);
-            }
-        } catch (error) {
-            console.error(`An unexpected network error occurred with model '${model}':`, error);
-        }
+                try { return JSON.parse(data.choices[0].message.content); } catch (parseError) { console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`); continue; }
+            } else { console.warn(`Model '${model}' returned no choices. Trying next model.`); }
+        } catch (error) { console.error(`An unexpected network error occurred with model '${model}':`, error); }
     }
-
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
+// --- MODIFIED SECTION: Generate prompt before checking cache ---
 async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) {
-    const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
+    // 1. Generate the prompts first.
+    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
+    
+    // 2. Generate the cache key using the inputs AND the system prompt.
+    const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms }, systemPrompt);
     
     try {
         const cachedData = await store.get(cacheKey, { type: "json" });
@@ -127,7 +102,7 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, 
     }
 
     console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
-    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
+    // 3. Call the LLM with the already-generated prompts.
     const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
     
     try {
@@ -141,51 +116,30 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, 
 }
 
 exports.handler = async (event, context) => {
-    const headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    };
-    if (event.httpMethod === 'OPTIONS') {
-        return { statusCode: 200, headers, body: '' };
-    }
-    if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-    }
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+    if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
+    if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 
     try {
         const body = JSON.parse(event.body || '{}');
         const { word, partOfSpeech, category, synonyms } = body;
         
-        if (!word || !partOfSpeech) {
-            return { statusCode: 400, headers, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
-        }
+        if (!word || !partOfSpeech) return { statusCode: 400, headers, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         
         let store;
-        try {
-            store = getStore("word-radar-cache");
-        } catch (storeError) {
-            console.warn('Failed to initialize blob store:', storeError.message);
-            store = null;
-        }
+        try { store = getStore("word-radar-cache"); } catch (storeError) { console.warn('Failed to initialize blob store:', storeError.message); store = null; }
         
         if (synonyms && synonyms.length > 0) {
-            let apiResponse;
-            if (store) {
-                apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store);
-            } else {
+            const apiResponse = store ? await getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) : await (async () => {
                 const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
-                apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
-            }
-            apiResponse.hub_word = word;
-            apiResponse.part_of_speech = partOfSpeech;
+                return await callOpenRouterWithFallback(systemPrompt, userPrompt);
+            })();
+            apiResponse.hub_word = word; apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
-        if (!MW_API_KEY) {
-            return { statusCode: 500, headers, body: JSON.stringify({ error: 'Merriam-Webster API key is not configured.' }) };
-        }
+        if (!MW_API_KEY) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Merriam-Webster API key is not configured.' }) };
 
         const url = `https://www.dictionaryapi.com/api/v3/references/thesaurus/json/${encodeURIComponent(word)}?key=${MW_API_KEY}`;
         const response = await fetch(url);
@@ -196,9 +150,7 @@ exports.handler = async (event, context) => {
             return { statusCode: 404, headers, body: JSON.stringify({ error: `No entries found for "${word}".` }) };
         }
         
-        // --- MODIFIED SECTION: Smarter Sense Parsing and De-duplication Logic ---
         const senseMap = new Map();
-
         const allRawSenses = data
             .filter(entry => entry.fl === partOfSpeech)
             .flatMap(entry => {
@@ -207,46 +159,27 @@ exports.handler = async (event, context) => {
                     const sense_data = sense_block[0][1];
                     let definition = (sense_data.dt && sense_data.dt[0] && sense_data.dt[0][1]) || sense_data.shortdef?.[0] || 'General sense';
                     definition = definition.replace(/{.*?}/g, '').trim();
-                    const synonyms = (sense_data.syn_list || [])
-                        .flatMap(syn_group => syn_group.map(syn => syn.wd))
-                        .slice(0, 25);
+                    const synonyms = (sense_data.syn_list || []).flatMap(syn_group => syn_group.map(syn => syn.wd)).slice(0, 25);
                     return { definition, synonyms };
                 });
             });
-
-        // De-duplicate by grouping synonyms under the same definition
         for (const sense of allRawSenses) {
             if (sense.synonyms.length > 0) {
-                if (senseMap.has(sense.definition)) {
-                    const existingSyns = senseMap.get(sense.definition);
-                    sense.synonyms.forEach(syn => existingSyns.add(syn));
-                } else {
-                    senseMap.set(sense.definition, new Set(sense.synonyms));
-                }
+                if (senseMap.has(sense.definition)) { const existingSyns = senseMap.get(sense.definition); sense.synonyms.forEach(syn => existingSyns.add(syn)); } 
+                else { senseMap.set(sense.definition, new Set(sense.synonyms)); }
             }
         }
-        
-        const senses = Array.from(senseMap.entries()).map(([definition, synSet]) => ({
-            definition,
-            synonyms: Array.from(synSet)
-        }));
-        // --- END OF MODIFIED SECTION ---
+        const senses = Array.from(senseMap.entries()).map(([definition, synSet]) => ({ definition, synonyms: Array.from(synSet) }));
 
-        if (senses.length === 0) {
-            return { statusCode: 404, headers, body: JSON.stringify({ error: `No synonyms found for "${word}" as a ${partOfSpeech}.` }) };
-        }
+        if (senses.length === 0) return { statusCode: 404, headers, body: JSON.stringify({ error: `No synonyms found for "${word}" as a ${partOfSpeech}.` }) };
         
         if (senses.length === 1) {
             console.log(`Single sense found for "${word}", proceeding directly to generation.`);
-            let apiResponse;
-            if (store) {
-                apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms }, store);
-            } else {
-                const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSspeech, category, senses[0].synonyms);
-                apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
-            }
-            apiResponse.hub_word = word;
-            apiResponse.part_of_speech = partOfSpeech;
+            const apiResponse = store ? await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms }, store) : await (async () => {
+                const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, senses[0].synonyms);
+                return await callOpenRouterWithFallback(systemPrompt, userPrompt);
+            })();
+            apiResponse.hub_word = word; apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
