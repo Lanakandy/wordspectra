@@ -2,8 +2,8 @@
 
 const fetch = require('node-fetch');
 // --- START: MODIFICATION ---
-// Import BOTH getStore (for local dev) and getDeployStore (for production)
-const { getStore, getDeployStore } = require('@netlify/blobs');
+// Import ONLY getStore. It works for both local dev and production.
+const { getStore } = require('@netlify/blobs');
 // --- END: MODIFICATION ---
 const { createHash } = require('crypto');
 
@@ -117,17 +117,9 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
 
 async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) {
     // --- START: MODIFICATION ---
-    // Conditionally get the correct store based on the environment
-    let store;
-    if (process.env.NETLIFY_DEV) {
-        // Use the local file-based store for development
-        console.log("Using local blob store for development.");
-        store = getStore("word-radar-cache");
-    } else {
-        // Use the deployed store for production
-        console.log("Using deployed blob store.");
-        store = getDeployStore("word-radar-cache");
-    }
+    // Get the store. The `getStore` function automatically handles both
+    // local dev and deployed production environments. No 'if' statement needed.
+    const store = getStore("word-radar-cache");
     // --- END: MODIFICATION ---
 
     const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
