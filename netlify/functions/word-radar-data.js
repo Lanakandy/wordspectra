@@ -1,11 +1,8 @@
 // netlify/functions/word-radar-data.js
 
-// --- START: SYNTAX FIX ---
-// Use ES Module 'import' syntax instead of 'require'
 import fetch from 'node-fetch';
 import { getStore } from '@netlify/blobs';
 import { createHash } from 'crypto';
-// --- END: SYNTAX FIX ---
 
 function generateCacheKey(object) {
     const ordered = Object.keys(object)
@@ -112,33 +109,41 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
 
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
-async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) {
-    // This call is now correctly scoped within the handler's execution path.
-    const store = getStore("word-radar-cache");
 
+async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) {
     const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
-    const cachedData = await store.get(cacheKey, { type: "json" });
-    if (cachedData) {
-        console.log(`CACHE HIT for key: ${cacheKey}`);
-        return cachedData;
+    
+    try {
+        const cachedData = await store.get(cacheKey, { type: "json" });
+        if (cachedData) {
+            console.log(`CACHE HIT for key: ${cacheKey}`);
+            return cachedData;
+        }
+    } catch (error) {
+        console.warn(`Cache read failed for key ${cacheKey}:`, error.message);
     }
 
     console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
     const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
     const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
     
-    await store.setJSON(cacheKey, apiResponse);
-    console.log(`Stored new response in cache for key: ${cacheKey}`);
+    try {
+        await store.setJSON(cacheKey, apiResponse);
+        console.log(`Stored new response in cache for key: ${cacheKey}`);
+    } catch (error) {
+        console.warn(`Cache write failed for key ${cacheKey}:`, error.message);
+    }
     
     return apiResponse;
 }
 
-// --- START: SYNTAX FIX ---
-// Use the 'export default async function' syntax
 export default async function handler(event, context) {
-// --- END: SYNTAX FIX ---
     if (event.httpMethod !== 'POST') {
-        return { statusCode: 405, body: 'Method Not Allowed' };
+        return { 
+            statusCode: 405, 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: 'Method Not Allowed' })
+        };
     }
 
     try {
@@ -146,14 +151,25 @@ export default async function handler(event, context) {
         let { word, partOfSpeech, category, synonyms } = body;
         
         if (!word || !partOfSpeech) {
-            return { statusCode: 400, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
+            return { 
+                statusCode: 400, 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ error: "Word and Part of Speech are required." }) 
+            };
         }
         
+        // Initialize the blob store within the function context
+        const store = getStore("word-radar-cache");
+        
         if (synonyms && synonyms.length > 0) {
-            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms });
+            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store);
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
-            return { statusCode: 200, body: JSON.stringify(apiResponse) };
+            return { 
+                statusCode: 200, 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(apiResponse) 
+            };
         }
 
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
@@ -164,7 +180,11 @@ export default async function handler(event, context) {
         
         const data = await response.json();
         if (!Array.isArray(data) || data.length === 0 || typeof data[0] !== 'object') {
-            return { statusCode: 404, body: JSON.stringify({ error: `No entries found for "${word}".` }) };
+            return { 
+                statusCode: 404, 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ error: `No entries found for "${word}".` }) 
+            };
         }
         
         const senses = data
@@ -176,20 +196,36 @@ export default async function handler(event, context) {
             .filter(sense => sense.synonyms.length > 0);
 
         if (senses.length === 0) {
-            return { statusCode: 404, body: JSON.stringify({ error: `No synonyms found for "${word}" as a ${partOfSpeech}.` }) };
+            return { 
+                statusCode: 404, 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ error: `No synonyms found for "${word}" as a ${partOfSpeech}.` }) 
+            };
         }
         
         if (senses.length === 1) {
-            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms });
+            const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms }, store);
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
-            return { statusCode: 200, body: JSON.stringify(apiResponse) };
+            return { 
+                statusCode: 200, 
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(apiResponse) 
+            };
         }
 
-        return { statusCode: 200, body: JSON.stringify({ senses }) };
+        return { 
+            statusCode: 200, 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ senses }) 
+        };
 
     } catch (error) {
         console.error("Function Error:", error);
-        return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+        return { 
+            statusCode: 500, 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ error: error.message }) 
+        };
     }
-};
+}
