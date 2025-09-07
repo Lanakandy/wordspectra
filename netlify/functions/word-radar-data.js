@@ -16,13 +16,14 @@ function generateCacheKey(object) {
 }
 
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
+    // --- MODIFIED SECTION: Added 'difficulty' to prompt requirements and JSON structure ---
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
 REQUIREMENTS:
 1.  **FILTER FIRST:** From the provided "Synonyms" list, you MUST select ONLY the words that function as a **${partOfSpeech}**. Discard any words that do not fit this grammatical role. For example, if the part of speech is 'verb', discard nouns like 'guardian' or 'lookout'.
 2.  Create 3-4 semantic facets (axes) for the hub word.
 3.  If a Focus Category is provided, one facet MUST relate to it.
-4.  For each word from your **filtered, grammatically-correct list**, generate: facet index, ring (0-3), frequency (0-100), a brief definition, a natural usage example, and intensity scores for all facets.
+4.  For each word from your **filtered, grammatically-correct list**, generate: facet index, ring (0-3), frequency (0-100), a brief definition, a natural usage example, a difficulty rating ('beginner', 'intermediate', or 'advanced'), and intensity scores for all facets.
 5.  Ensure the classified words are distributed logically across ALL facets. Do not assign all words to just one facet.
 
 JSON Structure:
@@ -41,6 +42,7 @@ JSON Structure:
       "frequency": 65,
       "definition": "Brief, clear definition for this specific synonym.",
       "example": "Natural usage example for the synonym.",
+      "difficulty": "intermediate",
       "intensities": {"dimension_key": 0.5, "other_key": -0.3}
     }
   ]
