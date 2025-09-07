@@ -1,21 +1,19 @@
-# Corrected and Consolidated netlify.toml
+# --- Corrected and Final netlify.toml ---
 
 # Build settings
 [build]
   publish = "/"
   functions = "netlify/functions"
 
-# --- START OF DEFINITIVE FIX ---
-# All function settings are now consolidated here.
-[functions]
-  # This enables the Blob store service for all functions.
-  [functions.blobs]
-    store = "word-radar-cache"
-  
-  # This wildcard applies the timeout setting to every individual function.
-  [functions."*"]
-    timeout = 26
-# --- END OF DEFINITIVE FIX ---
+# Enable the blob store for ALL functions.
+# This is a specific configuration table.
+[functions.blobs]
+  store = "word-radar-cache"
+
+# Apply a timeout setting to every individual function.
+# The wildcard "*" makes this a per-function setting.
+[functions."*"]
+  timeout = 26
 
 # Redirect rule for SPA
 [[redirects]]
