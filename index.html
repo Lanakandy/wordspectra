@@ -73,7 +73,7 @@
             transform: scale(1.05);
         }
 
-        #category-input, #custom-words-input { /* --- MODIFIED: Style both inputs --- */
+        #category-input, #custom-words-input {
             background: rgba(255, 255, 255, 0.05);
             border: 1px dashed #7a7a9f;
             border-radius: 8px;
@@ -85,15 +85,14 @@
             outline: none;
             transition: all 0.2s ease;
         }
-        #category-input::placeholder, #custom-words-input::placeholder { /* --- MODIFIED: Style both placeholders --- */
+        #category-input::placeholder, #custom-words-input::placeholder {
             color: #9a9ac8;
             opacity: 0.7;
         }
-        #category-input:focus, #custom-words-input:focus { /* --- MODIFIED: Style both focus states --- */
+        #category-input:focus, #custom-words-input:focus {
             background: rgba(255, 255, 255, 0.1);
             border-style: solid;
         }
-        /* --- NEW: Style for custom words textarea --- */
         #custom-words-input {
             resize: vertical;
             height: 60px;
@@ -172,7 +171,6 @@
         .header-logo { position: absolute; top: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); width: clamp(60px, 12vw, 90px); opacity: 1; transition: opacity 0.2s; }
         .header-logo:hover { opacity: 0.7; }
         
-        /* --- NEW: Container for top-right controls --- */
         #top-right-controls {
             position: absolute;
             top: clamp(10px, 2vh, 20px);
@@ -209,7 +207,6 @@
         #sound-toggle.sound-off .slash-icon { display: block; }
         #sound-toggle.sound-off path:not(.slash-icon) { opacity: 0.4; }
         #sound-toggle .slash-icon { display: none; }
-        /* --- END NEW --- */
         
         h1 { color: #ffffff; font-weight: 300; text-align: center; cursor: pointer; transition: color 0.2s; font-size: clamp(1.2rem, 4vw, 2rem); margin: clamp(10px, 2vh, 20px) 10px; padding: 0 10px; }
         h1:hover { color: #ffca85; }
@@ -279,11 +276,11 @@
 <body>
     <img src="https://eltcation.com/wp-content/uploads/2025/06/ELTcation_left.png" alt="ELTcation Logo" class="header-logo">
     
-    <!-- --- NEW: Control Buttons Container --- -->
     <div id="top-right-controls">
         <div id="sound-toggle" class="control-btn">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
-                <path d="M16.364 3.636a1 1 0 0 1 0 1.414l-1.414 1.414a5 5 0 0 0 0 7.072l1.414 1.414a1 1 0 0 1-1.414 1.414l-1.414-1.414a7 7 0 0 1 0-9.898l1.414-1.414a1 1 0 0 1 1.414 0zM12 5.05L12 19.05a1 1 0 0 1-1.638.r766L6 15H3a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1h3l4.362-4.816A1 1 0 0 1 12 5.05zm7.07 7.07a1 1 0 0 1-1.414-1.414l1.414-1.414a3 3 0 0 0 0-4.242l-1.414-1.414a1 1 0 1 1 1.414-1.414l1.414 1.414a5 5 0 0 1 0 7.07z"/>
+                <!-- --- FIXED: Corrected typo in SVG path data below --- -->
+                <path d="M16.364 3.636a1 1 0 0 1 0 1.414l-1.414 1.414a5 5 0 0 0 0 7.072l1.414 1.414a1 1 0 0 1-1.414 1.414l-1.414-1.414a7 7 0 0 1 0-9.898l1.414-1.414a1 1 0 0 1 1.414 0zM12 5.05L12 19.05a1 1 0 0 1-1.638.766L6 15H3a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1h3l4.362-4.816A1 1 0 0 1 12 5.05zm7.07 7.07a1 1 0 0 1-1.414-1.414l1.414-1.414a3 3 0 0 0 0-4.242l-1.414-1.414a1 1 0 1 1 1.414-1.414l1.414 1.414a5 5 0 0 1 0 7.07z"/>
                 <path class="slash-icon" d="M4.707 3.293a1 1 0 0 1 1.414 0l14.293 14.293a1 1 0 0 1-1.414 1.414L3.293 4.707a1 1 0 0 1 0-1.414z"/>
             </svg>
             <span class="control-label">Sound ON</span>
@@ -301,7 +298,6 @@
             <span class="control-label">New Word</span>
         </div>
     </div>
-    <!-- --- END NEW --- -->
 
 
     <h1 id="main-title">Enter a word to build its Radar</h1>
@@ -316,7 +312,6 @@
                 <div class="pos-option" data-pos="adjective">Adjective</div>
             </div>
             <input type="text" id="category-input" placeholder="Optional category (e.g., complexity)">
-            <!-- --- NEW: Custom words input for Lesson Mode --- -->
             <textarea id="custom-words-input" placeholder="Lesson Mode: Paste comma-separated words to classify instead of using the thesaurus."></textarea>
             <button id="submit-btn" class="hidden">Start</button>
         </div>
@@ -333,9 +328,10 @@
     </div>
     <div class="tooltip"></div>
 
-        <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // --- All the variable declarations and setup from before remain the same ---
+    <script>
+        // The entire script block from the previous response goes here.
+        // It has not been changed.
+        document.addEventListener('DOMContentLoaded', function() {
         const mainTitle = d3.select("#main-title");
         const inputContainer = d3.select("#input-container");
         const wordForm = d3.select("#word-form");
@@ -383,8 +379,6 @@
         const submitBtn = d3.select("#submit-btn");
 
         let currentSearch = { word: '', partOfSpeech: '', category: '' };
-
-        // --- All functions from before remain here, except for exportAsPNG which is replaced ---
         
         function updateSubmitButtonState() {
             const word = d3.select("#word-input").property("value").trim();
@@ -711,9 +705,7 @@
             });
         }
         
-        // --- MODIFIED SECTION: New and improved export function ---
         function exportAsPNG() {
-            // Helper function to recursively copy styles from the live SVG to a clone
             function copyStyles(source, target) {
                 const computedStyle = window.getComputedStyle(source);
                 for (let i = 0; i < computedStyle.length; i++) {
@@ -724,52 +716,30 @@
                     copyStyles(source.children[i], target.children[i]);
                 }
             }
-
-            // 1. Get the bounding box of the actual chart content
             const chartGroupNode = chartGroup.node();
             const bbox = chartGroupNode.getBBox();
             const padding = 40;
-            const scale = 2; // For higher resolution
-
-            // 2. Create a clone of the SVG and apply computed styles to it
+            const scale = 2;
             const svgClone = svg.node().cloneNode(true);
             copyStyles(svg.node(), svgClone);
             const chartGroupClone = d3.select(svgClone).select('g').node();
-
-            // 3. Create a clean SVG string, perfectly sized to the content
             const finalWidth = bbox.width + padding * 2;
             const finalHeight = bbox.height + padding * 2;
-            
-            // This transform moves the chart content from its original (potentially negative)
-            // coordinates to the top-left of our new, clean SVG canvas.
             const transform = `translate(${-bbox.x + padding}, ${-bbox.y + padding})`;
-
-            const svgString = `
-                <svg xmlns="http://www.w3.org/2000/svg" width="${finalWidth}" height="${finalHeight}">
-                    <g transform="${transform}">${chartGroupClone.innerHTML}</g>
-                </svg>`;
-
-            // 4. Create canvas and draw the image
+            const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="${finalWidth}" height="${finalHeight}"><g transform="${transform}">${chartGroupClone.innerHTML}</g></svg>`;
             const canvas = document.createElement("canvas");
             canvas.width = finalWidth * scale;
             canvas.height = finalHeight * scale;
             const ctx = canvas.getContext("2d");
             ctx.scale(scale, scale);
-
             const img = new Image();
             const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
             const url = URL.createObjectURL(blob);
-
             img.onload = function () {
-                // Set the desired white background
                 ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Draw the perfectly cropped SVG onto the canvas
                 ctx.drawImage(img, 0, 0);
                 URL.revokeObjectURL(url);
-                
-                // Trigger download
                 const pngUrl = canvas.toDataURL("image/png");
                 const link = document.createElement("a");
                 const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`;
