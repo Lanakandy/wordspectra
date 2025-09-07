@@ -16,7 +16,6 @@ function generateCacheKey(object) {
 }
 
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
-    // --- MODIFIED SECTION: Added 'difficulty' to prompt requirements and JSON structure ---
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
 REQUIREMENTS:
@@ -187,13 +186,11 @@ exports.handler = async (event, context) => {
             };
         }
         
-        // Initialize the blob store within the function context
         let store;
         try {
             store = getStore("word-radar-cache");
         } catch (storeError) {
             console.warn('Failed to initialize blob store:', storeError.message);
-            // Continue without caching if store fails
             store = null;
         }
         
@@ -202,7 +199,6 @@ exports.handler = async (event, context) => {
             if (store) {
                 apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store);
             } else {
-                // Call LLM directly without caching
                 const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
                 apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
             }
@@ -241,13 +237,33 @@ exports.handler = async (event, context) => {
             };
         }
         
+        // --- MODIFIED SECTION: Smarter Sense Parsing Logic ---
         const senses = data
             .filter(entry => entry.fl === partOfSpeech)
-            .map(entry => ({
-                definition: entry.shortdef?.[0] || "General sense",
-                synonyms: [...new Set((entry.meta?.syns || []).flat())].slice(0, 25)
-            }))
+            .flatMap(entry => {
+                // The MW API nests definition/synonym blocks inside entry.def[0].sseq
+                if (!entry.def || !entry.def[0] || !entry.def[0].sseq) {
+                    return [];
+                }
+                
+                // Map over each sense sequence (which represents a distinct meaning)
+                return entry.def[0].sseq.map(sense_block => {
+                    const sense_data = sense_block[0][1]; // The core data for this sense
+                    
+                    // Extract the definition text, removing formatting tags like {it}
+                    let definition = (sense_data.dt && sense_data.dt[0] && sense_data.dt[0][1]) || sense_data.shortdef?.[0] || 'General sense';
+                    definition = definition.replace(/{.*?}/g, ''); 
+
+                    // Extract synonyms for this specific sense
+                    const synonyms = (sense_data.syn_list || [])
+                        .flatMap(syn_group => syn_group.map(syn => syn.wd))
+                        .slice(0, 25);
+                        
+                    return { definition, synonyms };
+                });
+            })
             .filter(sense => sense.synonyms.length > 0);
+        // --- END OF MODIFIED SECTION ---
 
         if (senses.length === 0) {
             return { 
@@ -258,6 +274,7 @@ exports.handler = async (event, context) => {
         }
         
         if (senses.length === 1) {
+            console.log(`Single sense found for "${word}", proceeding directly to generation.`);
             let apiResponse;
             if (store) {
                 apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms }, store);
@@ -275,6 +292,7 @@ exports.handler = async (event, context) => {
             };
         }
 
+        console.log(`Multiple senses (${senses.length}) found for "${word}", returning for user selection.`);
         return { 
             statusCode: 200, 
             headers,
