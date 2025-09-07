@@ -1,6 +1,7 @@
 {
   "name": "word-radar-app",
   "version": "1.0.0",
+  "type": "module", 
   "description": "Word Radar Visualization",
   "main": "index.html",
   "scripts": {
