@@ -329,9 +329,8 @@
     <div class="tooltip"></div>
 
     <script>
-        // The entire script block from the previous response goes here.
-        // It has not been changed.
-        document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- All the variable declarations and setup from before remain the same ---
         const mainTitle = d3.select("#main-title");
         const inputContainer = d3.select("#input-container");
         const wordForm = d3.select("#word-form");
@@ -379,6 +378,8 @@
         const submitBtn = d3.select("#submit-btn");
 
         let currentSearch = { word: '', partOfSpeech: '', category: '' };
+
+        // --- All functions from before remain here, except for exportAsPNG which is replaced ---
         
         function updateSubmitButtonState() {
             const word = d3.select("#word-input").property("value").trim();
@@ -705,41 +706,69 @@
             });
         }
         
+        // --- MODIFIED SECTION: New and improved export function ---
         function exportAsPNG() {
-            function copyStyles(source, target) {
-                const computedStyle = window.getComputedStyle(source);
-                for (let i = 0; i < computedStyle.length; i++) {
-                    const key = computedStyle[i];
-                    target.style[key] = computedStyle.getPropertyValue(key);
-                }
-                for (let i = 0; i < source.children.length; i++) {
-                    copyStyles(source.children[i], target.children[i]);
+            // 1. Get all CSS rules from the document's stylesheets
+            let cssText = "";
+            for (const stylesheet of document.styleSheets) {
+                try {
+                    for (const rule of stylesheet.cssRules) {
+                        cssText += rule.cssText;
+                    }
+                } catch (e) {
+                    console.warn("Could not read CSS rules from stylesheet:", e);
                 }
             }
-            const chartGroupNode = chartGroup.node();
+
+            // 2. Clone the SVG node to avoid modifying the live chart
+            const svgNode = svg.node();
+            const svgClone = svgNode.cloneNode(true);
+            const d3Clone = d3.select(svgClone);
+
+            // 3. Embed the collected CSS rules into the cloned SVG
+            const styleElement = document.createElement("style");
+            styleElement.innerHTML = cssText;
+            const defsElement = document.createElement("defs");
+            defsElement.appendChild(styleElement);
+            svgClone.prepend(defsElement);
+
+            // 4. Calculate the bounding box of the actual chart content to crop correctly
+            const chartGroupNode = d3Clone.select("g").node();
             const bbox = chartGroupNode.getBBox();
-            const padding = 40;
-            const scale = 2;
-            const svgClone = svg.node().cloneNode(true);
-            copyStyles(svg.node(), svgClone);
-            const chartGroupClone = d3.select(svgClone).select('g').node();
+            const padding = 40; // Add some padding around the chart
             const finalWidth = bbox.width + padding * 2;
             const finalHeight = bbox.height + padding * 2;
-            const transform = `translate(${-bbox.x + padding}, ${-bbox.y + padding})`;
-            const svgString = `<svg xmlns="http://www.w3.org/2000/svg" width="${finalWidth}" height="${finalHeight}"><g transform="${transform}">${chartGroupClone.innerHTML}</g></svg>`;
+
+            // 5. Adjust the cloned SVG's attributes for a tight crop
+            d3Clone
+                .attr("width", finalWidth)
+                .attr("height", finalHeight)
+                .attr("viewBox", `${bbox.x - padding} ${bbox.y - padding} ${finalWidth} ${finalHeight}`);
+
+            // 6. Serialize the modified, self-contained SVG to a string
+            const svgString = new XMLSerializer().serializeToString(svgClone);
+
+            // 7. Create a canvas, draw the image with a white background, and trigger download
             const canvas = document.createElement("canvas");
+            const scale = 2; // For higher resolution
             canvas.width = finalWidth * scale;
             canvas.height = finalHeight * scale;
             const ctx = canvas.getContext("2d");
-            ctx.scale(scale, scale);
+            
             const img = new Image();
             const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
             const url = URL.createObjectURL(blob);
+
             img.onload = function () {
+                // Set the desired white background
                 ctx.fillStyle = "#ffffff";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
+                
+                // Draw the perfectly cropped SVG onto the canvas
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 URL.revokeObjectURL(url);
+                
+                // Trigger download
                 const pngUrl = canvas.toDataURL("image/png");
                 const link = document.createElement("a");
                 const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`;
@@ -749,8 +778,13 @@
                 link.click();
                 document.body.removeChild(link);
             };
+            img.onerror = function(err) {
+                 console.error("Error loading SVG image for export:", err);
+                 alert("Sorry, there was an error exporting the image.");
+            }
             img.src = url;
         }
+
 
         async function fetchWordData(word, partOfSpeech, category, synonyms = null) {
             try {
