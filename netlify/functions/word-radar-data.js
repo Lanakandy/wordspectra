@@ -1,11 +1,11 @@
 // netlify/functions/word-radar-data.js
 
-const fetch = require('node-fetch');
-// --- START: FINAL FIX ---
-// Import ONLY getStore. It works for both local dev and the modern production runtime.
-const { getStore } = require('@netlify/blobs');
-// --- END: FINAL FIX ---
-const { createHash } = require('crypto');
+// --- START: SYNTAX FIX ---
+// Use ES Module 'import' syntax instead of 'require'
+import fetch from 'node-fetch';
+import { getStore } from '@netlify/blobs';
+import { createHash } from 'crypto';
+// --- END: SYNTAX FIX ---
 
 function generateCacheKey(object) {
     const ordered = Object.keys(object)
@@ -18,7 +18,6 @@ function generateCacheKey(object) {
     return createHash('sha256').update(str).digest('hex');
 }
 
-// ... (getLLMPrompt and callOpenRouterWithFallback functions remain the same) ...
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
@@ -113,15 +112,11 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
 
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
-// --- START: FINAL FIX ---
-// The context object is NOT needed.
 async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) {
-    // The getStore function automatically handles both local and deployed environments.
+    // This call is now correctly scoped within the handler's execution path.
     const store = getStore("word-radar-cache");
-    // --- END: FINAL FIX ---
 
     const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms });
-
     const cachedData = await store.get(cacheKey, { type: "json" });
     if (cachedData) {
         console.log(`CACHE HIT for key: ${cacheKey}`);
@@ -138,10 +133,10 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }) 
     return apiResponse;
 }
 
-// --- START: FINAL FIX ---
-// The handler function does not need the 'context' object for blobs.
-exports.handler = async function(event) {
-// --- END: FINAL FIX ---
+// --- START: SYNTAX FIX ---
+// Use the 'export default async function' syntax
+export default async function handler(event, context) {
+// --- END: SYNTAX FIX ---
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -155,10 +150,7 @@ exports.handler = async function(event) {
         }
         
         if (synonyms && synonyms.length > 0) {
-            // --- START: FINAL FIX ---
-            // We no longer pass 'context' to this function.
             const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms });
-            // --- END: FINAL FIX ---
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, body: JSON.stringify(apiResponse) };
@@ -188,10 +180,7 @@ exports.handler = async function(event) {
         }
         
         if (senses.length === 1) {
-             // --- START: FINAL FIX ---
-            // We no longer pass 'context' to this function.
             const apiResponse = await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms });
-            // --- END: FINAL FIX ---
             apiResponse.hub_word = word;
             apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, body: JSON.stringify(apiResponse) };
