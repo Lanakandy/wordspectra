@@ -16,6 +16,7 @@ function generateCacheKey(object) {
 }
 
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
+    // --- MODIFIED SECTION: Added 'difficulty' to prompt requirements and JSON structure ---
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
 REQUIREMENTS:
@@ -203,7 +204,8 @@ exports.handler = async (event, context) => {
                 apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
             }
             
-            apiResponse.hub_word = word;
+            // --- MODIFIED SECTION: Ensure hub_word is always correctly set ---
+            apiResponse.hub_word = word; // Overwrite LLM's hub_word with the user's input
             apiResponse.part_of_speech = partOfSpeech;
             return { 
                 statusCode: 200, 
@@ -237,33 +239,23 @@ exports.handler = async (event, context) => {
             };
         }
         
-        // --- MODIFIED SECTION: Smarter Sense Parsing Logic ---
         const senses = data
             .filter(entry => entry.fl === partOfSpeech)
             .flatMap(entry => {
-                // The MW API nests definition/synonym blocks inside entry.def[0].sseq
                 if (!entry.def || !entry.def[0] || !entry.def[0].sseq) {
                     return [];
                 }
-                
-                // Map over each sense sequence (which represents a distinct meaning)
                 return entry.def[0].sseq.map(sense_block => {
-                    const sense_data = sense_block[0][1]; // The core data for this sense
-                    
-                    // Extract the definition text, removing formatting tags like {it}
+                    const sense_data = sense_block[0][1];
                     let definition = (sense_data.dt && sense_data.dt[0] && sense_data.dt[0][1]) || sense_data.shortdef?.[0] || 'General sense';
                     definition = definition.replace(/{.*?}/g, ''); 
-
-                    // Extract synonyms for this specific sense
                     const synonyms = (sense_data.syn_list || [])
                         .flatMap(syn_group => syn_group.map(syn => syn.wd))
                         .slice(0, 25);
-                        
                     return { definition, synonyms };
                 });
             })
             .filter(sense => sense.synonyms.length > 0);
-        // --- END OF MODIFIED SECTION ---
 
         if (senses.length === 0) {
             return { 
