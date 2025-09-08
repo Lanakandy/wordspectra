@@ -4,8 +4,6 @@ const fetch = require('node-fetch');
 const { getStore } = require('@netlify/blobs');
 const { createHash } = require('crypto');
 
-// --- MODIFIED SECTION: The cache key now includes the prompt ---
-// This ensures that if we change the prompt, the cache is automatically invalidated.
 function generateCacheKey(object, prompt) {
     const ordered = Object.keys(object)
         .sort()
@@ -60,6 +58,43 @@ Return ONLY valid JSON.`;
     return { systemPrompt, userPrompt };
 }
 
+function processThesaurusSensesWithFrequencyPriority(allRawSenses, primarySenseCount = 3, maxTotalSenses = 8) {
+    const senseMap = new Map();
+    
+    // Deduplicate by combining similar definitions
+    for (const sense of allRawSenses) {
+        if (sense.synonyms.length > 0) {
+            if (senseMap.has(sense.definition)) {
+                const existingSyns = senseMap.get(sense.definition);
+                sense.synonyms.forEach(syn => existingSyns.add(syn));
+            } else {
+                senseMap.set(sense.definition, new Set(sense.synonyms));
+            }
+        }
+    }
+
+    const senses = Array.from(senseMap.entries())
+        .map(([definition, synSet]) => ({ 
+            definition, 
+            synonyms: Array.from(synSet),
+            synonymCount: synSet.size
+        }))
+        .sort((a, b) => b.synonymCount - a.synonymCount); // Sort by frequency (synonym count)
+
+    if (senses.length === 0) return { senses: [], hasMore: false };
+    if (senses.length <= primarySenseCount) return { senses, hasMore: false };
+
+    // Split into primary and additional senses
+    const primarySenses = senses.slice(0, primarySenseCount);
+    const additionalSenses = senses.slice(primarySenseCount, maxTotalSenses);
+    
+    return {
+        senses: primarySenses,
+        additionalSenses: additionalSenses.length > 0 ? additionalSenses : null,
+        hasMore: additionalSenses.length > 0
+    };
+}
+
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.');
@@ -83,7 +118,6 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
-// --- MODIFIED SECTION: Generate prompt before checking cache ---
 async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) {
     // 1. Generate the prompts first.
     const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
@@ -150,7 +184,6 @@ exports.handler = async (event, context) => {
             return { statusCode: 404, headers, body: JSON.stringify({ error: `No entries found for "${word}".` }) };
         }
         
-        const senseMap = new Map();
         const allRawSenses = data
             .filter(entry => entry.fl === partOfSpeech)
             .flatMap(entry => {
@@ -163,28 +196,34 @@ exports.handler = async (event, context) => {
                     return { definition, synonyms };
                 });
             });
-        for (const sense of allRawSenses) {
-            if (sense.synonyms.length > 0) {
-                if (senseMap.has(sense.definition)) { const existingSyns = senseMap.get(sense.definition); sense.synonyms.forEach(syn => existingSyns.add(syn)); } 
-                else { senseMap.set(sense.definition, new Set(sense.synonyms)); }
-            }
-        }
-        const senses = Array.from(senseMap.entries()).map(([definition, synSet]) => ({ definition, synonyms: Array.from(synSet) }));
 
-        if (senses.length === 0) return { statusCode: 404, headers, body: JSON.stringify({ error: `No synonyms found for "${word}" as a ${partOfSpeech}.` }) };
+        const processedSenses = processThesaurusSensesWithFrequencyPriority(allRawSenses);
         
-        if (senses.length === 1) {
+        if (processedSenses.senses.length === 0) {
+            return { statusCode: 404, headers, body: JSON.stringify({ 
+                error: `No synonyms found for "${word}" as a ${partOfSpeech}.` 
+            }) };
+        }
+
+        if (processedSenses.senses.length === 1 && !processedSenses.hasMore) {
             console.log(`Single sense found for "${word}", proceeding directly to generation.`);
-            const apiResponse = store ? await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: senses[0].synonyms }, store) : await (async () => {
-                const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, senses[0].synonyms);
-                return await callOpenRouterWithFallback(systemPrompt, userPrompt);
-            })();
-            apiResponse.hub_word = word; apiResponse.part_of_speech = partOfSpeech;
+            const apiResponse = store ? 
+                await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: processedSenses.senses[0].synonyms }, store) : 
+                await (async () => {
+                    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, processedSenses.senses[0].synonyms);
+                    return await callOpenRouterWithFallback(systemPrompt, userPrompt);
+                })();
+            apiResponse.hub_word = word; 
+            apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
-        console.log(`Multiple de-duplicated senses (${senses.length}) found for "${word}", returning for user selection.`);
-        return { statusCode: 200, headers, body: JSON.stringify({ senses }) };
+        console.log(`Multiple senses found for "${word}" (${processedSenses.senses.length} primary, ${processedSenses.additionalSenses?.length || 0} additional), returning for user selection.`);
+        return { statusCode: 200, headers, body: JSON.stringify({
+            senses: processedSenses.senses,
+            additionalSenses: processedSenses.additionalSenses,
+            hasMore: processedSenses.hasMore
+        }) };
 
     } catch (error) {
         console.error("Function Error:", error);
