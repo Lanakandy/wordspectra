@@ -239,15 +239,17 @@
         }
         .control-btn {
             background: rgba(40, 40, 60, 0.9);
-            border: 1px solid #9a9ac8;
-            border-radius: 8px;
-            padding: 6px 10px;
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-            backdrop-filter: blur(5px);
-            transition: all 0.2s;
-        }
+    border: 1px solid #9a9ac8;
+    border-radius: 8px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    backdrop-filter: blur(5px);
+    transition: all 0.2s;
+    min-width: 130px; /* Add this to set a consistent minimum width */
+    justify-content: center; /* Add this to center the icon and text */
+}
         .control-btn:hover { background: rgba(60, 60, 80, 0.9); }
         .control-btn .control-icon {
             width: clamp(16px, 4vw, 20px);
@@ -716,7 +718,7 @@ function getMetadataHTML(d) {
         function drawSpectrumView() {
             spectrumGroup.selectAll("*").remove();
             spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9);
-            spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", 0).attr("y1", -15).attr("x2", 0).attr("y2", 15);
+            spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", 0).attr("y1", -50).attr("x2", 0).attr("y2", 50);
             const labelPadding = isMobile ? 12 : 25;
             spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-left").attr("x", -maxRadius * 0.9 - labelPadding).attr("text-anchor", "end").attr("dominant-baseline", "middle");
             spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-right").attr("x", maxRadius * 0.9 + labelPadding).attr("text-anchor", "start").attr("dominant-baseline", "middle");
