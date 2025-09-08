@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Word Radar</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -340,9 +341,10 @@
             <span class="control-label">Sound ON</span>
         </div>
         <div id="export-btn" class="control-btn hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
-                <path d="M12 16a1 1 0 0 1-1-1V4a1 1 0 1 1 2 0v11a1 1 0 0 1-1 1zm0 2a1 1 0 0 1-.707-.293l-4-4a1 1 0 1 1 1.414-1.414L12 15.586l3.293-3.293a1 1 0 1 1 1.414 1.414l-4 4A1 1 0 0 1 12 18zm-8 4a1 1 0 0 1-1-1V7a1 1 0 1 1 2 0v13H4zM20 7a1 1 0 1 1-2 0v13h-2a1 1 0 1 1 0-2h2V7z"/>
-            </svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-box-arrow-down" viewBox="0 0 16 16">
+  <path fill-rule="evenodd" d="M3.5 10a.5.5 0 0 1-.5-.5v-8a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 0 0 1h2A1.5 1.5 0 0 0 14 9.5v-8A1.5 1.5 0 0 0 12.5 0h-9A1.5 1.5 0 0 0 2 1.5v8A1.5 1.5 0 0 0 3.5 11h2a.5.5 0 0 0 0-1z"/>
+  <path fill-rule="evenodd" d="M7.646 15.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 14.293V5.5a.5.5 0 0 0-1 0v8.793l-2.146-2.147a.5.5 0 0 0-.708.708z"/>
+</svg>
             <span class="control-label">Export PNG</span>
         </div>
         <div id="restart-btn" class="control-btn hidden">
@@ -814,63 +816,19 @@ const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + l
         }
         
         function exportAsPNG() {
-            let cssText = "";
-            for (const stylesheet of document.styleSheets) {
-                try {
-                    for (const rule of stylesheet.cssRules) {
-                        cssText += rule.cssText;
-                    }
-                } catch (e) {
-                    console.warn("Could not read CSS rules from stylesheet:", e);
-                }
-            }
+            // 1. Select the DOM element you want to capture.
+            // We'll capture the whole chart container.
+            const exportArea = d3.select("#chart-container").node();
 
-            const svgNode = svg.node();
-            const svgClone = svgNode.cloneNode(true);
-            const d3Clone = d3.select(svgClone);
-
-            const styleElement = document.createElement("style");
-            styleElement.innerHTML = cssText;
-            const defsElement = document.createElement("defs");
-            defsElement.appendChild(styleElement);
-            svgClone.prepend(defsElement);
-
-            const chartGroupNode = d3Clone.select("g").node();
-            const bbox = chartGroupNode.getBBox();
-            const padding = 40;
-            const finalWidth = bbox.width + padding * 2;
-            const finalHeight = bbox.height + padding * 2;
-
-            d3Clone
-                .attr("width", finalWidth)
-                .attr("height", finalHeight)
-                .attr("viewBox", `${bbox.x - padding} ${bbox.y - padding} ${finalWidth} ${finalHeight}`);
-
-            const svgString = new XMLSerializer().serializeToString(svgClone);
-
-            const canvas = document.createElement("canvas");
-            const scale = 2; 
-            canvas.width = finalWidth * scale;
-            canvas.height = finalHeight * scale;
-            const ctx = canvas.getContext("2d");
-            
-            const img = new Image();
-            
-            // --- FIX STARTS HERE ---
-            // 1. Convert the raw SVG string to Base64
-            const svgBase64 = btoa(unescape(encodeURIComponent(svgString)));
-            // 2. Create a proper data URL
-            const dataUrl = 'data:image/svg+xml;base64,' + svgBase64;
-            // --- FIX ENDS HERE ---
-
-            img.onload = function () {
-                ctx.fillStyle = "#1a1a2e"; 
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                
-                // Note: URL.revokeObjectURL() is no longer needed
-                
+            // 2. Use html2canvas to render the element onto a canvas.
+            html2canvas(exportArea, {
+                backgroundColor: '#1a1a2e', // Ensure the background color is set
+                scale: 2, // Export at 2x resolution for better quality
+                logging: false, // Suppress console logging from the library
+                useCORS: true // Important if you have external images like the logo
+            }).then(canvas => {
+                // The rest of the logic is the same as before:
+                // create a link and trigger the download.
                 const pngUrl = canvas.toDataURL("image/png");
                 const link = document.createElement("a");
                 const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`;
@@ -879,14 +837,10 @@ const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + l
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-            };
-            img.onerror = function(err) {
-                 console.error("Error loading SVG image for export:", err);
-                 alert("Sorry, there was an error exporting the image.");
-            }
-            
-            // 3. Set the image source to the new, reliable data URL
-            img.src = dataUrl;
+            }).catch(err => {
+                console.error("html2canvas failed:", err);
+                alert("Sorry, there was an error exporting the image.");
+            });
         }
 
 
