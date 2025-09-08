@@ -855,15 +855,21 @@ const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + l
             const ctx = canvas.getContext("2d");
             
             const img = new Image();
-            const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
+            
+            // --- FIX STARTS HERE ---
+            // 1. Convert the raw SVG string to Base64
+            const svgBase64 = btoa(unescape(encodeURIComponent(svgString)));
+            // 2. Create a proper data URL
+            const dataUrl = 'data:image/svg+xml;base64,' + svgBase64;
+            // --- FIX ENDS HERE ---
 
             img.onload = function () {
-                ctx.fillStyle = "#1a1a2e"; // Using the app's background color
+                ctx.fillStyle = "#1a1a2e"; 
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                URL.revokeObjectURL(url);
+                
+                // Note: URL.revokeObjectURL() is no longer needed
                 
                 const pngUrl = canvas.toDataURL("image/png");
                 const link = document.createElement("a");
@@ -878,7 +884,9 @@ const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + l
                  console.error("Error loading SVG image for export:", err);
                  alert("Sorry, there was an error exporting the image.");
             }
-            img.src = url;
+            
+            // 3. Set the image source to the new, reliable data URL
+            img.src = dataUrl;
         }
 
 
