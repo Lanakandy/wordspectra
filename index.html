@@ -161,6 +161,42 @@
             border-color: #FF6B47;
             color: #1a1a2e;
         }
+
+#show-more-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed #7a7a9f;
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: #9a9ac8;
+    font-size: clamp(12px, 3vw, 14px);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+    margin-top: 5px;
+    font-style: italic;
+}
+
+#show-more-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #FF6B47;
+    color: #FF6B47;
+}
+
+.additional-senses {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+.additional-senses.expanded {
+    max-height: 400px; /* Adjust based on your needs */
+}
+
+.sense-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, #7a7a9f, transparent);
+    margin: 15px 0 10px 0;
+}
         @media (max-width: 768px) { 
             #word-input { font-size: 16px; padding: 12px 16px; width: min(80vw, 300px); } 
             #input-container { gap: 12px; }
@@ -279,7 +315,6 @@
     <div id="top-right-controls">
         <div id="sound-toggle" class="control-btn">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
-                <!-- --- FIXED: Corrected typo in SVG path data below --- -->
                 <path d="M16.364 3.636a1 1 0 0 1 0 1.414l-1.414 1.414a5 5 0 0 0 0 7.072l1.414 1.414a1 1 0 0 1-1.414 1.414l-1.414-1.414a7 7 0 0 1 0-9.898l1.414-1.414a1 1 0 0 1 1.414 0zM12 5.05L12 19.05a1 1 0 0 1-1.638.766L6 15H3a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1h3l4.362-4.816A1 1 0 0 1 12 5.05zm7.07 7.07a1 1 0 0 1-1.414-1.414l1.414-1.414a3 3 0 0 0 0-4.242l-1.414-1.414a1 1 0 1 1 1.414-1.414l1.414 1.414a5 5 0 0 1 0 7.07z"/>
                 <path class="slash-icon" d="M4.707 3.293a1 1 0 0 1 1.414 0l14.293 14.293a1 1 0 0 1-1.414 1.414L3.293 4.707a1 1 0 0 1 0-1.414z"/>
             </svg>
@@ -461,16 +496,70 @@
             const discoveryData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category);
             
             if (discoveryData && discoveryData.senses) {
-                scanner.classed("hidden", true);
-                mainTitle.text("Please select a meaning to explore");
-                senseSelector.select("#sense-title").text(`Which meaning of "${currentSearch.word}"?`);
+    scanner.classed("hidden", true);
+    mainTitle.text("Please select a meaning to explore");
+    senseSelector.select("#sense-title").text(`Which meaning of "${currentSearch.word}"?`);
+    
+    // Clear previous options
+    senseSelector.select("#sense-options").selectAll("*").remove();
+    
+    // Create primary sense options
+    const primaryOptions = senseSelector.select("#sense-options")
+        .selectAll(".primary-sense")
+        .data(discoveryData.senses);
+        
+    primaryOptions.enter()
+        .append("button")
+        .attr("class", "sense-option-btn primary-sense")
+        .text(d => `"${d.synonyms.slice(0, 3).join('", "')}" ${d.synonyms.length > 3 ? `(+${d.synonyms.length - 3} more)` : ''} — ${d.definition}`)
+        .on("click", (e, d) => handleSenseSelection(d.synonyms));
+    
+    // Add "Show more specific meanings" button if there are additional senses
+    if (discoveryData.hasMore && discoveryData.additionalSenses) {
+        const showMoreContainer = senseSelector.select("#sense-options")
+            .append("div")
+            .attr("id", "show-more-container");
+            
+        showMoreContainer.append("div")
+            .attr("id", "show-more-btn")
+            .text(`+ Show ${discoveryData.additionalSenses.length} more specific meanings`)
+            .on("click", function() {
+                const additionalContainer = d3.select("#additional-senses");
+                const isExpanded = additionalContainer.classed("expanded");
                 
-                const options = senseSelector.select("#sense-options").selectAll("button").data(discoveryData.senses);
-                options.enter().append("button").attr("class", "sense-option-btn").merge(options)
-                    .text(d => `"${d.synonyms[0]}", etc. – ${d.definition}`)
-                    .on("click", (e, d) => handleSenseSelection(d.synonyms));
-                options.exit().remove();
-                senseSelector.classed("hidden", false);
+                if (!isExpanded) {
+                    // Show additional senses
+                    additionalContainer.classed("expanded", true);
+                    d3.select(this).text("− Show fewer meanings");
+                } else {
+                    // Hide additional senses
+                    additionalContainer.classed("expanded", false);
+                    d3.select(this).text(`+ Show ${discoveryData.additionalSenses.length} more specific meanings`);
+                }
+            });
+        
+        // Create divider
+        showMoreContainer.append("div").attr("class", "sense-divider");
+        
+        // Create container for additional senses
+        const additionalContainer = showMoreContainer.append("div")
+            .attr("id", "additional-senses")
+            .attr("class", "additional-senses");
+            
+        const additionalOptions = additionalContainer.selectAll(".additional-sense")
+            .data(discoveryData.additionalSenses);
+            
+        additionalOptions.enter()
+            .append("button")
+            .attr("class", "sense-option-btn additional-sense")
+            .style("opacity", "0.8")
+            .style("font-size", "clamp(13px, 3vw, 15px)")
+            .text(d => `"${d.synonyms.slice(0, 2).join('", "')}" ${d.synonyms.length > 2 ? `(+${d.synonyms.length - 2})` : ''} — ${d.definition}`)
+            .on("click", (e, d) => handleSenseSelection(d.synonyms));
+    }
+    
+    senseSelector.classed("hidden", false);
+}
             } else if (discoveryData && discoveryData.words) {
                 currentRadarData = discoveryData;
                 scanner.classed("hidden", true);
@@ -706,9 +795,7 @@
             });
         }
         
-        // --- MODIFIED SECTION: New and improved export function ---
         function exportAsPNG() {
-            // 1. Get all CSS rules from the document's stylesheets
             let cssText = "";
             for (const stylesheet of document.styleSheets) {
                 try {
@@ -720,37 +807,31 @@
                 }
             }
 
-            // 2. Clone the SVG node to avoid modifying the live chart
             const svgNode = svg.node();
             const svgClone = svgNode.cloneNode(true);
             const d3Clone = d3.select(svgClone);
 
-            // 3. Embed the collected CSS rules into the cloned SVG
             const styleElement = document.createElement("style");
             styleElement.innerHTML = cssText;
             const defsElement = document.createElement("defs");
             defsElement.appendChild(styleElement);
             svgClone.prepend(defsElement);
 
-            // 4. Calculate the bounding box of the actual chart content to crop correctly
             const chartGroupNode = d3Clone.select("g").node();
             const bbox = chartGroupNode.getBBox();
-            const padding = 40; // Add some padding around the chart
+            const padding = 40;
             const finalWidth = bbox.width + padding * 2;
             const finalHeight = bbox.height + padding * 2;
 
-            // 5. Adjust the cloned SVG's attributes for a tight crop
             d3Clone
                 .attr("width", finalWidth)
                 .attr("height", finalHeight)
                 .attr("viewBox", `${bbox.x - padding} ${bbox.y - padding} ${finalWidth} ${finalHeight}`);
 
-            // 6. Serialize the modified, self-contained SVG to a string
             const svgString = new XMLSerializer().serializeToString(svgClone);
 
-            // 7. Create a canvas, draw the image with a white background, and trigger download
             const canvas = document.createElement("canvas");
-            const scale = 2; // For higher resolution
+            const scale = 2; 
             canvas.width = finalWidth * scale;
             canvas.height = finalHeight * scale;
             const ctx = canvas.getContext("2d");
@@ -760,15 +841,12 @@
             const url = URL.createObjectURL(blob);
 
             img.onload = function () {
-                // Set the desired white background
-                ctx.fillStyle = "#ffffff";
+                ctx.fillStyle = "#1a1a2e"; // Using the app's background color
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 
-                // Draw the perfectly cropped SVG onto the canvas
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 URL.revokeObjectURL(url);
                 
-                // Trigger download
                 const pngUrl = canvas.toDataURL("image/png");
                 const link = document.createElement("a");
                 const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`;
