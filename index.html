@@ -131,6 +131,7 @@
             border: 1px solid #9a9ac8;
             border-radius: 12px;
             padding: clamp(20px, 5vw, 30px);
+            max-height: 85vh;
             max-width: clamp(300px, 80vw, 500px);
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
@@ -144,7 +145,25 @@
             flex-direction: column;
             gap: 10px;
             width: 100%;
+            overflow-y: auto;
+            padding-right: 10px;
+            margin-right: -10px;
         }
+
+#sense-options::-webkit-scrollbar {
+  width: 8px;
+}
+#sense-options::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+#sense-options::-webkit-scrollbar-thumb {
+  background-color: #7a7a9f;
+  border-radius: 4px;
+}
+#sense-options::-webkit-scrollbar-thumb:hover {
+  background-color: #9a9ac8;
+}
         .sense-option-btn {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid #7a7a9f;
@@ -402,9 +421,8 @@
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 20] : [8, 30]);
         
         const largestBubbleRadius = bubbleSizeScale.range()[1];
-        const spectrumRange = maxRadius * 0.8;
-        const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]);
-
+        const spectrumRange = maxRadius * 0.75; // Tighter range to ensure bubbles stay clear of labels
+const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]).clamp(true);
         const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
         const spectrumGroup = chartGroup.append("g").attr("class", "spectrum-view").style("opacity", 0).attr("pointer-events", "none");
         const bubblesGroup = chartGroup.append("g").attr("class", "bubbles-container");
