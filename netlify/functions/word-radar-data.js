@@ -11,7 +11,7 @@ function generateCacheKey(object, prompt) {
             obj[key] = object[key];
             return obj;
         }, {});
-    const str = JSON.stringify(ordered) + prompt; // Add the prompt text to the string
+    const str = JSON.stringify(ordered) + prompt;
     return createHash('sha256').update(str).digest('hex');
 }
 
@@ -58,42 +58,88 @@ Return ONLY valid JSON.`;
     return { systemPrompt, userPrompt };
 }
 
-function processThesaurusSensesWithFrequencyPriority(allRawSenses, primarySenseCount = 3, maxTotalSenses = 8) {
-    const senseMap = new Map();
-    
-    // Deduplicate by combining similar definitions
-    for (const sense of allRawSenses) {
-        if (sense.synonyms.length > 0) {
-            if (senseMap.has(sense.definition)) {
-                const existingSyns = senseMap.get(sense.definition);
-                sense.synonyms.forEach(syn => existingSyns.add(syn));
-            } else {
-                senseMap.set(sense.definition, new Set(sense.synonyms));
+// --- NEW ENHANCED SENSE PROCESSING LOGIC ---
+
+function cleanDefinition(definition) {
+    return definition
+        .replace(/{.*?}/g, '')      // Remove markup like {it}
+        .replace(/\s+/g, ' ')       // Normalize whitespace
+        .replace(/^:\s*/, '')       // Remove leading colons
+        .replace(/[;,].*$/, '')     // Keep only the first clause before a semicolon or comma
+        .trim()
+        .toLowerCase();
+}
+
+function calculateSimilarity(str1, str2) {
+    // Jaccard similarity based on word tokens
+    const words1 = new Set(str1.split(/\s+/));
+    const words2 = new Set(str2.split(/\s+/));
+    const intersection = new Set([...words1].filter(x => words2.has(x)));
+    const union = new Set([...words1, ...words2]);
+    return union.size === 0 ? 0 : intersection.size / union.size;
+}
+
+function processSensesWithClustering(
+    allRawSenses, 
+    primarySenseCount = 3, 
+    maxTotalSenses = 8, 
+    similarityThreshold = 0.5
+) {
+    // 1. Pre-process and pre-sort by synonym count to establish cluster seeds
+    const processedSenses = allRawSenses
+        .map(sense => ({
+            ...sense,
+            cleanDef: cleanDefinition(sense.definition),
+            synonymCount: sense.synonyms.length
+        }))
+        .sort((a, b) => b.synonymCount - a.synonymCount);
+
+    // 2. Greedily cluster similar senses
+    const clusters = [];
+    for (const sense of processedSenses) {
+        if (sense.synonymCount === 0) continue;
+
+        let foundCluster = false;
+        for (const cluster of clusters) {
+            if (calculateSimilarity(sense.cleanDef, cluster.cleanDef) > similarityThreshold) {
+                // Merge into the existing cluster
+                const combinedSynonyms = new Set([...cluster.synonyms, ...sense.synonyms]);
+                cluster.synonyms = Array.from(combinedSynonyms);
+                cluster.synonymCount = cluster.synonyms.length;
+
+                // Keep the longer, likely more descriptive, definition as the representative
+                if (sense.definition.length > cluster.definition.length) {
+                    cluster.definition = sense.definition;
+                    cluster.cleanDef = sense.cleanDef;
+                }
+                foundCluster = true;
+                break;
             }
+        }
+
+        if (!foundCluster) {
+            // No similar cluster found, create a new one
+            clusters.push({ ...sense });
         }
     }
 
-    const senses = Array.from(senseMap.entries())
-        .map(([definition, synSet]) => ({ 
-            definition, 
-            synonyms: Array.from(synSet),
-            synonymCount: synSet.size
-        }))
-        .sort((a, b) => b.synonymCount - a.synonymCount); // Sort by frequency (synonym count)
+    // 3. Sort final clusters by their aggregated synonym count
+    const finalSenses = clusters.sort((a, b) => b.synonymCount - a.synonymCount);
 
-    if (senses.length === 0) return { senses: [], hasMore: false };
-    if (senses.length <= primarySenseCount) return { senses, hasMore: false };
+    // 4. Split into primary and additional for progressive disclosure
+    if (finalSenses.length === 0) return { senses: [], hasMore: false };
+    if (finalSenses.length <= primarySenseCount) return { senses: finalSenses, hasMore: false };
 
-    // Split into primary and additional senses
-    const primarySenses = senses.slice(0, primarySenseCount);
-    const additionalSenses = senses.slice(primarySenseCount, maxTotalSenses);
-    
+    const primarySenses = finalSenses.slice(0, primarySenseCount);
+    const additionalSenses = finalSenses.slice(primarySenseCount, maxTotalSenses);
+
     return {
         senses: primarySenses,
         additionalSenses: additionalSenses.length > 0 ? additionalSenses : null,
         hasMore: additionalSenses.length > 0
     };
 }
+
 
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
@@ -119,10 +165,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
 }
 
 async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) {
-    // 1. Generate the prompts first.
     const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
-    
-    // 2. Generate the cache key using the inputs AND the system prompt.
     const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms }, systemPrompt);
     
     try {
@@ -136,7 +179,6 @@ async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, 
     }
 
     console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
-    // 3. Call the LLM with the already-generated prompts.
     const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
     
     try {
@@ -191,13 +233,13 @@ exports.handler = async (event, context) => {
                 return entry.def[0].sseq.map(sense_block => {
                     const sense_data = sense_block[0][1];
                     let definition = (sense_data.dt && sense_data.dt[0] && sense_data.dt[0][1]) || sense_data.shortdef?.[0] || 'General sense';
-                    definition = definition.replace(/{.*?}/g, '').trim();
                     const synonyms = (sense_data.syn_list || []).flatMap(syn_group => syn_group.map(syn => syn.wd)).slice(0, 25);
                     return { definition, synonyms };
                 });
             });
 
-        const processedSenses = processThesaurusSensesWithFrequencyPriority(allRawSenses);
+        // *** DROP-IN REPLACEMENT: Use the new clustering function ***
+        const processedSenses = processSensesWithClustering(allRawSenses);
         
         if (processedSenses.senses.length === 0) {
             return { statusCode: 404, headers, body: JSON.stringify({ 
@@ -218,7 +260,7 @@ exports.handler = async (event, context) => {
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
-        console.log(`Multiple senses found for "${word}" (${processedSenses.senses.length} primary, ${processedSenses.additionalSenses?.length || 0} additional), returning for user selection.`);
+        console.log(`Multiple consolidated senses found for "${word}" (${processedSenses.senses.length} primary, ${processedSenses.additionalSenses?.length || 0} additional), returning for user selection.`);
         return { statusCode: 200, headers, body: JSON.stringify({
             senses: processedSenses.senses,
             additionalSenses: processedSenses.additionalSenses,
