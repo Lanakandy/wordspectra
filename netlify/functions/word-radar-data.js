@@ -15,15 +15,16 @@ function generateCacheKey(object, prompt) {
     return createHash('sha256').update(str).digest('hex');
 }
 
+// PROMPT FOR STANDARD SYNONYM RADAR (MODIFIED)
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
 REQUIREMENTS:
-1.  **FILTER FIRST:** From the provided "Synonyms" list, you MUST select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**. Discard any that do not fit this grammatical role. For example, if the part of speech is 'verb', keep 'watch' and 'look after', but discard nouns like 'guardian'.
-2.  Create 3-4 semantic facets (axes) for the hub word.
+1.  **FILTER FIRST:** From the provided "Synonyms" list, you MUST select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**. Discard any that do not fit this grammatical role.
+2.  Create **2-3 semantic facets** (axes) for the hub word. DO NOT create a gradable opposites/antonym scale (a cline), as that is handled separately.
 3.  If a Focus Category is provided, one facet MUST relate to it.
-4.  For each word from your **filtered, grammatically-correct list**, generate: facet index, ring (0-3), frequency (0-100), a brief definition, a natural usage example, a difficulty rating ('beginner', 'intermediate', or 'advanced'), and intensity scores for all facets.
-5.  Ensure the classified words are distributed logically across ALL facets. Do not assign all words to just one facet.
+4.  For each word from your **filtered, grammatically-correct list**, generate: facet index (starting from 0 for your facets), ring (0-3), frequency (0-100), a brief definition, a natural usage example, a difficulty rating ('beginner', 'intermediate', or 'advanced'), and intensity scores for all facets.
+5.  Ensure the classified words are distributed logically across ALL your facets. Do not assign all words to just one facet.
 
 JSON Structure:
 {
@@ -58,8 +59,98 @@ Return ONLY valid JSON.`;
     return { systemPrompt, userPrompt };
 }
 
-// --- NEW ENHANCED SENSE PROCESSING LOGIC ---
+// NEW PROMPT FOR CLINE GENERATION
+function getLLMClinePrompt(word, partOfSpeech) {
+    const systemPrompt = `You are a linguist creating a dataset for a "Cline" visualization, which is a scale of gradable words from one extreme to its opposite.
 
+TASK:
+For the given hub word, generate a list of 8-12 words that form a continuous scale from its most extreme gradable antonym to the hub word itself and slightly beyond if applicable. For example, for "hot", the scale could be (freezing, cold, cool, mild, warm, hot, scorching).
+
+REQUIREMENTS:
+1.  The list MUST include the hub word and at least one strong antonym.
+2.  All words must be grammatically correct as a **${partOfSpeech}**.
+3.  For EACH word in the cline, provide:
+    *   **term**: The word itself.
+    *   **intensity**: A numeric score from -1.0 (most extreme antonym) to 1.0 (most extreme synonym/hub word), with neutral/middle words around 0.
+    *   **definition**: A brief, clear definition.
+    *   **example**: A natural sentence using the word.
+    *   **difficulty**: 'beginner', 'intermediate', or 'advanced'.
+    *   **frequency**: An estimated usage frequency from 0 to 100.
+4.  Identify the two extremes of your generated scale and provide them as `spectrumLabels`.
+
+JSON Structure:
+{
+  "hub_word": "${word}",
+  "part_of_speech": "${partOfSpeech}",
+  "spectrumLabels": ["Extreme Antonym", "Extreme Synonym"],
+  "words": [
+    {
+      "term": "antonym",
+      "intensity": -1.0,
+      "definition": "...",
+      "example": "...",
+      "difficulty": "beginner",
+      "frequency": 80
+    },
+    {
+      "term": "middle_word",
+      "intensity": 0.0,
+      "definition": "...",
+      "example": "...",
+      "difficulty": "intermediate",
+      "frequency": 50
+    },
+    {
+      "term": "${word}",
+      "intensity": 0.8,
+      "definition": "...",
+      "example": "...",
+      "difficulty": "beginner",
+      "frequency": 90
+    }
+  ]
+}
+
+Return ONLY valid JSON.`;
+
+    const userPrompt = `Generate a cline for:\nHub Word: "${word}"\nPart of Speech: "${partOfSpeech}"`;
+    
+    return { systemPrompt, userPrompt };
+}
+
+async function getCachedResponse(requestBody, promptFunction, store) {
+    const { systemPrompt, userPrompt } = promptFunction(requestBody.word, requestBody.partOfSpeech, requestBody.category, requestBody.synonyms);
+    // Add requestType to cache key to differentiate between 'radar' and 'cline' requests for the same word
+    const cacheKeyObject = { ...requestBody };
+    delete cacheKeyObject.synonyms; // Don't include synonyms list in key for cline
+    const cacheKey = generateCacheKey(cacheKeyObject, systemPrompt);
+    
+    try {
+        const cachedData = await store.get(cacheKey, { type: "json" });
+        if (cachedData) {
+            console.log(`CACHE HIT for key: ${cacheKey}`);
+            return cachedData;
+        }
+    } catch (error) {
+        console.warn(`Cache read failed for key ${cacheKey}:`, error.message);
+    }
+
+    console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
+    const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
+    
+    try {
+        await store.setJSON(cacheKey, apiResponse);
+        console.log(`Stored new response in cache for key: ${cacheKey}`);
+    } catch (error) {
+        console.warn(`Cache write failed for key ${cacheKey}:`, error.message);
+    }
+    
+    return apiResponse;
+}
+
+// --- All other helper functions like processSensesWithClustering, callOpenRouterWithFallback, etc., remain unchanged ---
+
+// [Keep the existing processSensesWithClustering and callOpenRouterWithFallback functions here]
 function cleanDefinition(definition) {
     return definition
         .replace(/{.*?}/g, '')      // Remove markup like {it}
@@ -163,34 +254,6 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     }
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
-
-async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) {
-    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
-    const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms }, systemPrompt);
-    
-    try {
-        const cachedData = await store.get(cacheKey, { type: "json" });
-        if (cachedData) {
-            console.log(`CACHE HIT for key: ${cacheKey}`);
-            return cachedData;
-        }
-    } catch (error) {
-        console.warn(`Cache read failed for key ${cacheKey}:`, error.message);
-    }
-
-    console.log(`CACHE MISS for key: ${cacheKey}. Calling LLM...`);
-    const apiResponse = await callOpenRouterWithFallback(systemPrompt, userPrompt);
-    
-    try {
-        await store.setJSON(cacheKey, apiResponse);
-        console.log(`Stored new response in cache for key: ${cacheKey}`);
-    } catch (error) {
-        console.warn(`Cache write failed for key ${cacheKey}:`, error.message);
-    }
-    
-    return apiResponse;
-}
-
 exports.handler = async (event, context) => {
     const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
     if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
@@ -198,22 +261,34 @@ exports.handler = async (event, context) => {
 
     try {
         const body = JSON.parse(event.body || '{}');
-        const { word, partOfSpeech, category, synonyms } = body;
+        const { word, partOfSpeech, category, synonyms, requestType } = body;
         
         if (!word || !partOfSpeech) return { statusCode: 400, headers, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         
         let store;
         try { store = getStore("word-radar-cache"); } catch (storeError) { console.warn('Failed to initialize blob store:', storeError.message); store = null; }
-        
+
+        // --- ROUTE TO CLINE GENERATION ---
+        if (requestType === 'cline') {
+            console.log(`Received cline request for "${word}".`);
+            const promptFunction = getLLMClinePrompt;
+            const apiResponse = store ? 
+                await getCachedResponse({ word, partOfSpeech, requestType }, promptFunction, store) :
+                await (async () => {
+                    const { systemPrompt, userPrompt } = promptFunction(word, partOfSpeech);
+                    return await callOpenRouterWithFallback(systemPrompt, userPrompt);
+                })();
+            return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
+        }
+
+        // --- EXISTING RADAR/SYNONYM FLOW ---
         if (synonyms && synonyms.length > 0) {
-            const apiResponse = store ? await getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) : await (async () => {
-                const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
-                return await callOpenRouterWithFallback(systemPrompt, userPrompt);
-            })();
+            const apiResponse = await getCachedResponse({ word, partOfSpeech, category, synonyms }, getLLMPrompt, store);
             apiResponse.hub_word = word; apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
+        // --- [The rest of the thesaurus lookup and sense processing logic remains exactly the same] ---
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
         if (!MW_API_KEY) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Merriam-Webster API key is not configured.' }) };
 
@@ -238,7 +313,6 @@ exports.handler = async (event, context) => {
                 });
             });
 
-        // *** DROP-IN REPLACEMENT: Use the new clustering function ***
         const processedSenses = processSensesWithClustering(allRawSenses);
         
         if (processedSenses.senses.length === 0) {
@@ -249,12 +323,7 @@ exports.handler = async (event, context) => {
 
         if (processedSenses.senses.length === 1 && !processedSenses.hasMore) {
             console.log(`Single sense found for "${word}", proceeding directly to generation.`);
-            const apiResponse = store ? 
-                await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: processedSenses.senses[0].synonyms }, store) : 
-                await (async () => {
-                    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, processedSenses.senses[0].synonyms);
-                    return await callOpenRouterWithFallback(systemPrompt, userPrompt);
-                })();
+            const apiResponse = await getCachedResponse({ word, partOfSpeech, category, synonyms: processedSenses.senses[0].synonyms }, getLLMPrompt, store);
             apiResponse.hub_word = word; 
             apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
