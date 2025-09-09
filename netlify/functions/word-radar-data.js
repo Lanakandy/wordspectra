@@ -16,29 +16,34 @@ function generateCacheKey(object, prompt) {
 }
 
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
-    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter, find opposites, and classify these words.
+    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
 
 REQUIREMENTS:
-1.  **IDENTIFY OPPOSITE:** Determine if the hub word is gradable (like 'hot', 'big'). If it is, identify its primary antonym (e.g., for 'hot', it's 'cold').
-2.  **CREATE POLARITY FACET:** If an antonym is found, one of the 3-4 semantic facets MUST be a "polarity" axis. Name it appropriately (e.g., "Temperature") and set its spectrumLabels to be the antonym and the hub word (e.g., ["Cold", "Hot"]). This MUST be the first facet in the 'facets' array (at index 0).
-3.  **GATHER & FILTER WORDS:** Combine the provided synonyms with relevant antonyms. From this combined list, you MUST select ONLY the words that function as a **${partOfSpeech}**.
-4.  **GENERATE GRADED SCORES:** For each word, generate all required fields. For the polarity facet, assign a graded intensity score from -1.0 (strongest antonym) to +1.0 (strongest synonym). For example, 'plain' might be -0.2, 'ugly' -0.6, and 'hideous' -0.9. This grading is crucial.
-5.  **ASSIGN RINGS:** The final JSON MUST contain a 5-element "rings" array: **["Core", "Common", "Specific", "Nuanced", "Opposites"]**.
-6.  **PLACE ANTONYMS:** For any word that is an antonym (i.e., its polarity intensity score is negative), its "ring" value in the output **MUST be 4** (the index for the "Opposites" ring). Synonyms (positive intensity) should be placed in rings 0-3.
+1.  **FILTER FIRST:** From the provided "Synonyms" list, you MUST select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**. Discard any that do not fit this grammatical role. For example, if the part of speech is 'verb', keep 'watch' and 'look after', but discard nouns like 'guardian'.
+2.  Create 3-4 semantic facets (axes) for the hub word.
+3.  If a Focus Category is provided, one facet MUST relate to it.
+4.  For each word from your **filtered, grammatically-correct list**, generate: facet index, ring (0-3), frequency (0-100), a brief definition, a natural usage example, a difficulty rating ('beginner', 'intermediate', or 'advanced'), and intensity scores for all facets.
+5.  Ensure the classified words are distributed logically across ALL facets. Do not assign all words to just one facet.
 
 JSON Structure:
 {
   "hub_word": "original word",
   "part_of_speech": "provided part of speech", 
   "facets": [
-    {"name": "Attractiveness", "key": "attractiveness", "spectrumLabels": ["Unattractive", "Attractive"]},
-    {"name": "Another Dimension", "key": "dimension_key", "spectrumLabels": ["Low", "High"]}
+    {"name": "Semantic Dimension", "key": "dimension_key", "spectrumLabels": ["Low End", "High End"]}
   ],
-  "rings": ["Core", "Common", "Specific", "Nuanced", "Opposites"],
+  "rings": ["Core", "Common", "Specific", "Nuanced"],
   "words": [
-    { "term": "gorgeous", "facet": 0, "ring": 1, "intensities": {"attractiveness": 0.8, ...} },
-    { "term": "hideous", "facet": 0, "ring": 4, "intensities": {"attractiveness": -0.9, ...} },
-    { "term": "plain", "facet": 0, "ring": 4, "intensities": {"attractiveness": -0.2, ...} }
+    {
+      "term": "synonym_from_filtered_list",
+      "facet": 0,
+      "ring": 1,
+      "frequency": 65,
+      "definition": "Brief, clear definition for this specific synonym.",
+      "example": "Natural usage example for the synonym.",
+      "difficulty": "intermediate",
+      "intensities": {"dimension_key": 0.5, "other_key": -0.3}
+    }
   ]
 }
 
@@ -52,6 +57,8 @@ Return ONLY valid JSON.`;
     
     return { systemPrompt, userPrompt };
 }
+
+// --- NEW ENHANCED SENSE PROCESSING LOGIC ---
 
 function cleanDefinition(definition) {
     return definition
@@ -231,6 +238,7 @@ exports.handler = async (event, context) => {
                 });
             });
 
+        // *** DROP-IN REPLACEMENT: Use the new clustering function ***
         const processedSenses = processSensesWithClustering(allRawSenses);
         
         if (processedSenses.senses.length === 0) {
