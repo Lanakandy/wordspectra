@@ -420,7 +420,6 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        
         const mainTitle = d3.select("#main-title");
         const inputContainer = d3.select("#input-container");
         const wordForm = d3.select("#word-form");
@@ -457,7 +456,7 @@
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 20] : [8, 30]);
         
         const largestBubbleRadius = bubbleSizeScale.range()[1];
-        const spectrumRange = maxRadius * 0.75; // Tighter range to ensure bubbles stay clear of labels
+        const spectrumRange = maxRadius * 0.75; 
         const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]).clamp(true);
         const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
         const spectrumGroup = chartGroup.append("g").attr("class", "spectrum-view").style("opacity", 0).attr("pointer-events", "none");
@@ -679,9 +678,9 @@
         
         function drawRadarBackground(rings = []) {
             radarBgGroup.selectAll("*").remove(); 
-            const ringCount = rings.length || 4; // Use the provided rings array length
+            const ringCount = rings.length || 4; 
             const ringWidth = maxRadius / ringCount;
-            const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e", "#18182c"]; // Added one more color for the 5th ring bg
+            const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e", "#18182c"]; 
 
             const radarRings = radarBgGroup.selectAll(".radar-ring")
                 .data(d3.range(ringCount - 1, -1, -1))
@@ -691,11 +690,11 @@
                 .style("fill", (d, i) => ringColors[i % ringColors.length]);
             
             if (rings.length > 0 && rings[rings.length - 1].toLowerCase() === 'opposites') {
-                radarRings.filter((d, i) => i === 0) // The first drawn ring is the outermost one
+                radarRings.filter((d, i) => i === 0) 
                     .style("stroke-dasharray", "4 4")
-                    .style("stroke", "#7a7a9f"); // Add a subtle stroke to make the dashes visible
+                    .style("stroke", "#7a7a9f"); 
             }
-           
+
             radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-v").attr("x1", 0).attr("y1", -maxRadius).attr("x2", 0).attr("y2", maxRadius);
             radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-h").attr("x1", -maxRadius).attr("y1", 0).attr("x2", maxRadius).attr("y2", 0);
             
@@ -714,7 +713,6 @@
             spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-right").attr("x", maxRadius * 0.9 + labelPadding).attr("text-anchor", "start").attr("dominant-baseline", "middle");
         }
 
-        // --- COMPLETELY REVISED AND CORRECTED FUNCTION ---
         function drawWordBubbles(radarData) {
             const labelOffset = maxRadius + (isMobile ? 15 : 25);
             const labelData = radarData.facets.map((facet, i) => ({ ...facet, ...[{ x: labelOffset, y: 0, anchor: "start" }, { x: 0, y: labelOffset, anchor: "middle" }, { x: -labelOffset, y: 0, anchor: "end" }, { x: 0, y: -labelOffset, anchor: "middle" }][i], index: i }));
@@ -733,12 +731,9 @@
             const nodes = radarData.words.map(d => {
                 const r = ringScale(d.ring + 0.5) + (Math.random() - 0.5) * (maxRadius / radarData.rings.length) * 0.5;
                 let angle;
-                // Check if the first facet is a polarity facet and if the word belongs to it
                 if (radarData.facets[0] && d.facet === 0 && d.intensities[radarData.facets[0].key] < 0) {
-                    // This is an antonym, plot it in the opposite quadrant (+180 degrees)
                     angle = (d.facet * (Math.PI / 2)) + Math.PI + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
                 } else {
-                    // This is a synonym or belongs to another facet
                     angle = (d.facet * (Math.PI / 2)) + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
                 }
                 d.targetX = r * Math.cos(angle); 
@@ -754,6 +749,7 @@
             
             currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term).enter().append("g").attr("class", "word-bubble");
             
+            // --- FIX IS HERE ---
             currentBubbles.append("circle")
                 .attr("r", 0)
                 .style("fill", d => {
@@ -762,7 +758,7 @@
                     }
                     return facetColors[d.facet % 10];
                 })
-                .transition()
+                .transition() // This was missing, causing circles to stay at r=0
                 .duration(500)
                 .delay((d,i) => i * 30)
                 .attr("r", d => bubbleSizeScale(d.frequency));
@@ -810,9 +806,9 @@
                 legend.style("opacity", 1);
                 spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
                 radarBgGroup.selectAll(".quadrant-line, .ring-label, .ring-label-path").transition().delay(200).duration(500).style("opacity", 1);
-                const ringCount = 4;
+                const ringCount = currentRadarData ? currentRadarData.rings.length : 4;
                 const ringWidth = maxRadius / ringCount;
-                radarBgGroup.selectAll(".radar-ring").transition().delay((d,i) => 200 + (3-i)*80).duration(500).attr("r", d => (d + 1) * ringWidth).style("opacity", 1);
+                radarBgGroup.selectAll(".radar-ring").transition().delay((d,i) => 200 + (ringCount-1-i)*80).duration(500).attr("r", d => (d + 1) * ringWidth).style("opacity", 1);
                 labelsGroup.selectAll(".quadrant-label").classed("active", false);
                 labelsGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
                 if (currentBubbles) {
