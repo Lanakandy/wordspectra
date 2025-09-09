@@ -728,15 +728,12 @@
             });
             const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius - bubbleSizeScale.range()[1]]);
             
+            // --- FIX 2: REVERT TO ORIGINAL ANGLE CALCULATION ---
+            // This fixes the bubble overlap by distributing antonyms into their proper facet quadrants.
+            // The `d.ring` value will still place them in the outer "Opposites" ring correctly.
             const nodes = radarData.words.map(d => {
                 const r = ringScale(d.ring + 0.5) + (Math.random() - 0.5) * (maxRadius / radarData.rings.length) * 0.5;
-                let angle;
-                // Check for antonyms IF the polarity axis exists
-                if (radarData.facets && radarData.facets[0] && d.facet === 0 && d.intensities && d.intensities[radarData.facets[0].key] < 0) {
-                    angle = (d.facet * (Math.PI / 2)) + Math.PI + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
-                } else {
-                    angle = (d.facet * (Math.PI / 2)) + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
-                }
+                const angle = (d.facet * (Math.PI / 2)) + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
                 d.targetX = r * Math.cos(angle); 
                 d.targetY = r * Math.sin(angle); 
                 return d;
@@ -753,22 +750,22 @@
             currentBubbles.append("circle")
                 .attr("r", 0)
                 .style("fill", d => {
-                    // --- ROBUSTNESS FIX STARTS HERE ---
-                    // Safely check if a polarity facet exists and if the word has a score for it.
-                    if (radarData.facets && radarData.facets[0] && d.facet === 0) {
+                    // --- FIX 1: REFINED COLOR LOGIC ---
+                    // Use special red/blue colors ONLY for antonyms (those in the last ring).
+                    // All other bubbles (synonyms) use the standard legend colors.
+                    const isOpposite = radarData.rings.length > 4 && d.ring === (radarData.rings.length - 1);
+                    if (isOpposite) {
                         const polarityKey = radarData.facets[0].key;
-                        if (d.intensities && d.intensities[polarityKey] !== undefined) {
-                            return polarityColor(d.intensities[polarityKey]);
-                        }
+                        // Use the graded color if intensity is available, otherwise a default blue.
+                        return d.intensities && d.intensities[polarityKey] !== undefined ? polarityColor(d.intensities[polarityKey]) : '#1f77b4';
                     }
-                    // Fallback for all other cases.
+                    // This is the original, correct logic for all synonyms.
                     return facetColors[d.facet % 10];
-                    // --- ROBUSTNESS FIX ENDS HERE ---
                 })
                 .transition()
                 .duration(500)
                 .delay((d,i) => i * 30)
-                .attr("r", d => bubbleSizeScale(d.frequency || 50)); // Add a fallback for missing frequency
+                .attr("r", d => bubbleSizeScale(d.frequency || 50));
 
             currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0).transition().duration(500).delay((d,i) => i * 30).style("opacity", 1);
             currentBubbles.attr("transform", d => `translate(${d.radarX}, ${d.radarY})`);
