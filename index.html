@@ -420,7 +420,7 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // --- All the variable declarations and setup from before remain the same ---
+        
         const mainTitle = d3.select("#main-title");
         const inputContainer = d3.select("#input-container");
         const wordForm = d3.select("#word-form");
@@ -679,12 +679,26 @@
         
         function drawRadarBackground(rings = []) {
             radarBgGroup.selectAll("*").remove(); 
-            const ringCount = 4;
+            const ringCount = rings.length || 4; // Use the provided rings array length
             const ringWidth = maxRadius / ringCount;
-            const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e"];
-            radarBgGroup.selectAll(".radar-ring").data(d3.range(ringCount - 1, -1, -1)).enter().append("circle").attr("class", "radar-ring").attr("r", d => (d + 1) * ringWidth).style("fill", (d, i) => ringColors[i]);
+            const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e", "#18182c"]; // Added one more color for the 5th ring bg
+
+            const radarRings = radarBgGroup.selectAll(".radar-ring")
+                .data(d3.range(ringCount - 1, -1, -1))
+                .enter().append("circle")
+                .attr("class", "radar-ring")
+                .attr("r", d => (d + 1) * ringWidth)
+                .style("fill", (d, i) => ringColors[i % ringColors.length]);
+            
+            if (rings.length > 0 && rings[rings.length - 1].toLowerCase() === 'opposites') {
+                radarRings.filter((d, i) => i === 0) // The first drawn ring is the outermost one
+                    .style("stroke-dasharray", "4 4")
+                    .style("stroke", "#7a7a9f"); // Add a subtle stroke to make the dashes visible
+            }
+           
             radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-v").attr("x1", 0).attr("y1", -maxRadius).attr("x2", 0).attr("y2", maxRadius);
             radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-h").attr("x1", -maxRadius).attr("y1", 0).attr("x2", maxRadius).attr("y2", 0);
+            
             if(rings.length > 0) {
                 radarBgGroup.selectAll(".ring-label-path").data(rings).enter().append("path").attr("id", (d, i) => `ring-path-${i}`).attr("d", (d, i) => `M ${-(i + 0.5) * ringWidth}, 0 A ${(i + 0.5) * ringWidth},${(i + 0.5) * ringWidth} 0 0 1 ${(i + 0.5) * ringWidth},0`).style("fill", "none");
                 radarBgGroup.selectAll(".ring-label").data(rings).enter().append("text").attr("class", "ring-label").append("textPath").attr("startOffset", "50%").attr("xlink:href", (d, i) => `#ring-path-${i}`).text(d => d.toUpperCase());
