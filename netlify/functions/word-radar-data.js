@@ -16,39 +16,35 @@ function generateCacheKey(object, prompt) {
 }
 
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
-    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
+    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter, find opposites, and classify these words.
 
 REQUIREMENTS:
-1.  **FILTER FIRST:** From the provided "Synonyms" list, you MUST select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**. Discard any that do not fit this grammatical role. For example, if the part of speech is 'verb', keep 'watch' and 'look after', but discard nouns like 'guardian'.
-2.  Create 3-4 semantic facets (axes) for the hub word.
-3.  If a Focus Category is provided, one facet MUST relate to it.
-4.  For each word from your **filtered, grammatically-correct list**, generate: facet index, ring (0-3), frequency (0-100), a brief definition, a natural usage example, a difficulty rating ('beginner', 'intermediate', or 'advanced'), and intensity scores for all facets.
-5.  Ensure the classified words are distributed logically across ALL facets. Do not assign all words to just one facet.
+1.  **IDENTIFY OPPOSITE:** First, determine if the hub word is gradable (like 'hot', 'big', 'fast'). If it is, identify its primary antonym (e.g., for 'hot', the antonym is 'cold').
+2.  **CREATE POLARITY FACET:** If an antonym is found, one of the 3-4 semantic facets MUST be a "polarity" axis representing the cline between the antonym and the hub word. Name it appropriately (e.g., "Temperature") and set its spectrumLabels to be the antonym and the hub word (e.g., ["Cold", "Hot"]).
+3.  **GATHER WORDS:** The list of words to classify should now include BOTH the provided synonyms AND a few relevant antonyms for the identified opposite.
+4.  **FILTER GRAMMAR:** From this combined list, you MUST select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**.
+5.  **CLASSIFY & SCORE:** For each word from your **filtered list**, generate all required fields. For the polarity facet, assign an intensity score from -1.0 (strongest antonym) to +1.0 (strongest synonym). A word like 'tepid' might be near 0.0.
+6.  **DISTRIBUTE:** Ensure the classified words are distributed logically across ALL facets.
 
-JSON Structure:
+JSON Structure (no changes needed):
 {
   "hub_word": "original word",
   "part_of_speech": "provided part of speech", 
   "facets": [
-    {"name": "Semantic Dimension", "key": "dimension_key", "spectrumLabels": ["Low End", "High End"]}
+    {"name": "Temperature", "key": "temperature", "spectrumLabels": ["Cold", "Hot"]}
+    // ... other facets
   ],
   "rings": ["Core", "Common", "Specific", "Nuanced"],
   "words": [
-    {
-      "term": "synonym_from_filtered_list",
-      "facet": 0,
-      "ring": 1,
-      "frequency": 65,
-      "definition": "Brief, clear definition for this specific synonym.",
-      "example": "Natural usage example for the synonym.",
-      "difficulty": "intermediate",
-      "intensities": {"dimension_key": 0.5, "other_key": -0.3}
-    }
+    // A synonym
+    { "term": "scorching", "facet": 0, "ring": 2, ..., "intensities": {"temperature": 0.9, ...} },
+    // An antonym
+    { "term": "freezing", "facet": 0, "ring": 2, ..., "intensities": {"temperature": -0.9, ...} }
   ]
 }
 
 Return ONLY valid JSON.`;
-
+// ... User prompt remains the same, the LLM will source antonyms itself.
     let userPrompt = `Hub Word: "${word}"\nPart of Speech: "${partOfSpeech}"\n\nSynonyms to filter and classify:\n[${synonyms.map(s => `"${s}"`).join(', ')}]`;
     
     if (category) {
