@@ -746,13 +746,38 @@ function getMetadataHTML(d) {
             const simulation = d3.forceSimulation(nodes).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 4 : 5)).strength(0.8)).force("x", d3.forceX(d => d.targetX).strength(0.1)).force("y", d3.forceY(d => d.targetY).strength(0.1)).stop();
             for (let i = 0; i < 200; ++i) simulation.tick();
             nodes.forEach(d => { d.radarX = d.x; d.radarY = d.y; });
+            const polarityColor = d3.scaleSequential(d3.interpolateRdBu).domain([1, -1]);
             currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term).enter().append("g").attr("class", "word-bubble");
-            currentBubbles.append("circle").attr("r", 0).style("fill", (d, i) => facetColors[d.facet % 10]).transition().duration(500).delay((d,i) => i * 30).attr("r", d => bubbleSizeScale(d.frequency));
+            currentBubbles.append("circle")
+    .attr("r", 0)
+    .style("fill", d => {
+        // If the word belongs to the polarity facet and has an intensity value
+        const polarityFacetKey = radarData.facets[0].key; // Assuming facet 0 is polarity
+        if (d.facet === 0 && d.intensities[polarityFacetKey] !== undefined) {
+            return polarityColor(d.intensities[polarityFacetKey]);
+        }
+        return facetColors[d.facet % 10]; // Fallback for other facets
+    })
             currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0).transition().duration(500).delay((d,i) => i * 30).style("opacity", 1);
             currentBubbles.attr("transform", d => `translate(${d.radarX}, ${d.radarY})`);
             setupTooltipEvents(currentBubbles);
         }
         
+const nodes = radarData.words.map(d => {
+    // ...
+    let angle;
+    const polarityFacetKey = radarData.facets[0].key;
+    if (d.facet === 0 && d.intensities[polarityFacetKey] < 0) {
+        // This is an antonym, plot it in the opposite quadrant (+180 degrees)
+        angle = (d.facet * (Math.PI / 2)) + Math.PI + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
+    } else {
+        // This is a synonym or belongs to another facet
+        angle = (d.facet * (Math.PI / 2)) + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
+    }
+    d.targetX = r * Math.cos(angle); 
+    d.targetY = r * Math.sin(angle); 
+    return d;
+});
         function clearChart() {
             clearComparison();
             if (currentBubbles) currentBubbles.remove();
