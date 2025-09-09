@@ -15,30 +15,30 @@ function generateCacheKey(object, prompt) {
     return createHash('sha256').update(str).digest('hex');
 }
 
-// --- NEW ENHANCED PROMPT FOR CLINES/OPPOSITES ---
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter, find opposites, and classify these words.
 
 REQUIREMENTS:
-1.  **IDENTIFY OPPOSITE:** First, determine if the hub word is gradable (like 'hot', 'big', 'fast'). If it is, identify its primary antonym (e.g., for 'hot', the antonym is 'cold').
-2.  **CREATE POLARITY FACET:** If an antonym is found, one of the 3-4 semantic facets MUST be a "polarity" axis representing the cline between the antonym and the hub word. Name it appropriately (e.g., "Temperature") and set its spectrumLabels to be the antonym and the hub word (e.g., ["Cold", "Hot"]). This MUST be the first facet in the 'facets' array (at index 0).
-3.  **GATHER WORDS:** The list of words to classify should now include BOTH the provided synonyms AND a few relevant antonyms for the identified opposite.
-4.  **FILTER GRAMMAR:** From this combined list, you MUST select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**.
-5.  **CLASSIFY & SCORE:** For each word from your **filtered list**, generate all required fields. For the polarity facet, assign an intensity score from -1.0 (strongest antonym) to +1.0 (strongest synonym). A word like 'tepid' might be near 0.0.
-6.  **DISTRIBUTE:** Ensure the classified words are distributed logically across ALL facets. Words on the polarity cline should be assigned to facet 0.
+1.  **IDENTIFY OPPOSITE:** Determine if the hub word is gradable (like 'hot', 'big'). If it is, identify its primary antonym (e.g., for 'hot', it's 'cold').
+2.  **CREATE POLARITY FACET:** If an antonym is found, one of the 3-4 semantic facets MUST be a "polarity" axis. Name it appropriately (e.g., "Temperature") and set its spectrumLabels to be the antonym and the hub word (e.g., ["Cold", "Hot"]). This MUST be the first facet in the 'facets' array (at index 0).
+3.  **GATHER & FILTER WORDS:** Combine the provided synonyms with relevant antonyms. From this combined list, you MUST select ONLY the words that function as a **${partOfSpeech}**.
+4.  **GENERATE GRADED SCORES:** For each word, generate all required fields. For the polarity facet, assign a graded intensity score from -1.0 (strongest antonym) to +1.0 (strongest synonym). For example, 'plain' might be -0.2, 'ugly' -0.6, and 'hideous' -0.9. This grading is crucial.
+5.  **ASSIGN RINGS:** The final JSON MUST contain a 5-element "rings" array: **["Core", "Common", "Specific", "Nuanced", "Opposites"]**.
+6.  **PLACE ANTONYMS:** For any word that is an antonym (i.e., its polarity intensity score is negative), its "ring" value in the output **MUST be 4** (the index for the "Opposites" ring). Synonyms (positive intensity) should be placed in rings 0-3.
 
 JSON Structure:
 {
   "hub_word": "original word",
   "part_of_speech": "provided part of speech", 
   "facets": [
-    {"name": "Temperature", "key": "temperature", "spectrumLabels": ["Cold", "Hot"]},
+    {"name": "Attractiveness", "key": "attractiveness", "spectrumLabels": ["Unattractive", "Attractive"]},
     {"name": "Another Dimension", "key": "dimension_key", "spectrumLabels": ["Low", "High"]}
   ],
-  "rings": ["Core", "Common", "Specific", "Nuanced"],
+  "rings": ["Core", "Common", "Specific", "Nuanced", "Opposites"],
   "words": [
-    { "term": "scorching", "facet": 0, "ring": 2, "frequency": 70, "definition": "...", "example": "...", "difficulty": "intermediate", "intensities": {"temperature": 0.9, "dimension_key": 0.2} },
-    { "term": "freezing", "facet": 0, "ring": 2, "frequency": 65, "definition": "...", "example": "...", "difficulty": "beginner", "intensities": {"temperature": -0.9, "dimension_key": -0.1} }
+    { "term": "gorgeous", "facet": 0, "ring": 1, "intensities": {"attractiveness": 0.8, ...} },
+    { "term": "hideous", "facet": 0, "ring": 4, "intensities": {"attractiveness": -0.9, ...} },
+    { "term": "plain", "facet": 0, "ring": 4, "intensities": {"attractiveness": -0.2, ...} }
   ]
 }
 
@@ -52,8 +52,6 @@ Return ONLY valid JSON.`;
     
     return { systemPrompt, userPrompt };
 }
-
-// --- All other functions (cleanDefinition, processSensesWithClustering, callOpenRouterWithFallback, etc.) remain the same ---
 
 function cleanDefinition(definition) {
     return definition
