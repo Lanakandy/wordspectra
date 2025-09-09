@@ -420,6 +420,7 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // --- All the variable declarations and setup from before remain the same ---
         const mainTitle = d3.select("#main-title");
         const inputContainer = d3.select("#input-container");
         const wordForm = d3.select("#word-form");
@@ -456,8 +457,8 @@
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 20] : [8, 30]);
         
         const largestBubbleRadius = bubbleSizeScale.range()[1];
-        const spectrumRange = maxRadius * 0.75; 
-        const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]).clamp(true);
+        const spectrumRange = maxRadius * 0.75; // Tighter range to ensure bubbles stay clear of labels
+const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]).clamp(true);
         const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
         const spectrumGroup = chartGroup.append("g").attr("class", "spectrum-view").style("opacity", 0).attr("pointer-events", "none");
         const bubblesGroup = chartGroup.append("g").attr("class", "bubbles-container");
@@ -466,6 +467,8 @@
         const submitBtn = d3.select("#submit-btn");
 
         let currentSearch = { word: '', partOfSpeech: '', category: '' };
+
+        // --- All functions from before remain here, except for exportAsPNG which is replaced ---
         
         function updateSubmitButtonState() {
             const word = d3.select("#word-input").property("value").trim();
@@ -547,62 +550,69 @@
             const discoveryData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category);
             
             if (discoveryData && discoveryData.senses) {
-                scanner.classed("hidden", true);
-                mainTitle.text("Please select a meaning to explore");
-                senseSelector.select("#sense-title").text(`Which meaning of "${currentSearch.word}"?`);
+    scanner.classed("hidden", true);
+    mainTitle.text("Please select a meaning to explore");
+    senseSelector.select("#sense-title").text(`Which meaning of "${currentSearch.word}"?`);
+    
+    // Clear previous options
+    senseSelector.select("#sense-options").selectAll("*").remove();
+    
+    // Create primary sense options
+    const primaryOptions = senseSelector.select("#sense-options")
+        .selectAll(".primary-sense")
+        .data(discoveryData.senses);
+        
+    primaryOptions.enter()
+        .append("button")
+        .attr("class", "sense-option-btn primary-sense")
+        .text(d => `"${d.synonyms.slice(0, 3).join('", "')}" ${d.synonyms.length > 3 ? `(+${d.synonyms.length - 3} more)` : ''} — ${d.definition}`)
+        .on("click", (e, d) => handleSenseSelection(d.synonyms));
+    
+    // Add "Show more specific meanings" button if there are additional senses
+    if (discoveryData.hasMore && discoveryData.additionalSenses) {
+        const showMoreContainer = senseSelector.select("#sense-options")
+            .append("div")
+            .attr("id", "show-more-container");
+            
+        showMoreContainer.append("div")
+            .attr("id", "show-more-btn")
+            .text(`+ Show ${discoveryData.additionalSenses.length} more specific meanings`)
+            .on("click", function() {
+                const additionalContainer = d3.select("#additional-senses");
+                const isExpanded = additionalContainer.classed("expanded");
                 
-                senseSelector.select("#sense-options").selectAll("*").remove();
-                
-                const primaryOptions = senseSelector.select("#sense-options")
-                    .selectAll(".primary-sense")
-                    .data(discoveryData.senses);
-                    
-                primaryOptions.enter()
-                    .append("button")
-                    .attr("class", "sense-option-btn primary-sense")
-                    .text(d => `"${d.synonyms.slice(0, 3).join('", "')}" ${d.synonyms.length > 3 ? `(+${d.synonyms.length - 3} more)` : ''} — ${d.definition}`)
-                    .on("click", (e, d) => handleSenseSelection(d.synonyms));
-                
-                if (discoveryData.hasMore && discoveryData.additionalSenses) {
-                    const showMoreContainer = senseSelector.select("#sense-options")
-                        .append("div")
-                        .attr("id", "show-more-container");
-                        
-                    showMoreContainer.append("div")
-                        .attr("id", "show-more-btn")
-                        .text(`+ Show ${discoveryData.additionalSenses.length} more specific meanings`)
-                        .on("click", function() {
-                            const additionalContainer = d3.select("#additional-senses");
-                            const isExpanded = additionalContainer.classed("expanded");
-                            
-                            if (!isExpanded) {
-                                additionalContainer.classed("expanded", true);
-                                d3.select(this).text("− Show fewer meanings");
-                            } else {
-                                additionalContainer.classed("expanded", false);
-                                d3.select(this).text(`+ Show ${discoveryData.additionalSenses.length} more specific meanings`);
-                            }
-                        });
-                    
-                    showMoreContainer.append("div").attr("class", "sense-divider");
-                    
-                    const additionalContainer = showMoreContainer.append("div")
-                        .attr("id", "additional-senses")
-                        .attr("class", "additional-senses");
-                        
-                    const additionalOptions = additionalContainer.selectAll(".additional-sense")
-                        .data(discoveryData.additionalSenses);
-                        
-                    additionalOptions.enter()
-                        .append("button")
-                        .attr("class", "sense-option-btn additional-sense")
-                        .style("opacity", "0.8")
-                        .style("font-size", "clamp(13px, 3vw, 15px)")
-                        .text(d => `"${d.synonyms.slice(0, 2).join('", "')}" ${d.synonyms.length > 2 ? `(+${d.synonyms.length - 2})` : ''} — ${d.definition}`)
-                        .on("click", (e, d) => handleSenseSelection(d.synonyms));
+                if (!isExpanded) {
+                    // Show additional senses
+                    additionalContainer.classed("expanded", true);
+                    d3.select(this).text("− Show fewer meanings");
+                } else {
+                    // Hide additional senses
+                    additionalContainer.classed("expanded", false);
+                    d3.select(this).text(`+ Show ${discoveryData.additionalSenses.length} more specific meanings`);
                 }
-                
-                senseSelector.classed("hidden", false);
+            });
+        
+        // Create divider
+        showMoreContainer.append("div").attr("class", "sense-divider");
+        
+        // Create container for additional senses
+        const additionalContainer = showMoreContainer.append("div")
+            .attr("id", "additional-senses")
+            .attr("class", "additional-senses");
+            
+        const additionalOptions = additionalContainer.selectAll(".additional-sense")
+            .data(discoveryData.additionalSenses);
+            
+        additionalOptions.enter()
+            .append("button")
+            .attr("class", "sense-option-btn additional-sense")
+            .style("opacity", "0.8")
+            .style("font-size", "clamp(13px, 3vw, 15px)")
+            .text(d => `"${d.synonyms.slice(0, 2).join('", "')}" ${d.synonyms.length > 2 ? `(+${d.synonyms.length - 2})` : ''} — ${d.definition}`)
+            .on("click", (e, d) => handleSenseSelection(d.synonyms));
+    }
+    
+    senseSelector.classed("hidden", false);
 
             } else if (discoveryData && discoveryData.words) {
                 currentRadarData = discoveryData;
@@ -644,18 +654,33 @@
             }
         }
 
-        function getMetadataHTML(d) {
-            const difficultyHTML = d.difficulty ? `<span class="difficulty ${d.difficulty.toLowerCase()}">${d.difficulty}</span>` : '';
-            let freqLevel = 0;
-            if (d.frequency > 0) {
-                freqLevel = Math.ceil((d.frequency / 100) * 4);
-            }
-            const frequencyHTML = `
-                <div class="frequency-indicator freq-${freqLevel}" title="Frequency: ${d.frequency}/100">
-                    <div class="freq-bar"></div><div class="freq-bar"></div><div class="freq-bar"></div><div class="freq-bar"></div>
-                </div>`;
-            return `<div class="metadata"><div class="metadata-item">${difficultyHTML}${frequencyHTML}</div></div>`;
-        }
+/**
+ * Generates the complete HTML for a word's metadata section.
+ * @param {object} d The word data object.
+ * @returns {string} The complete HTML string for the metadata.
+ */
+function getMetadataHTML(d) {
+    // 1. Difficulty pill
+    const difficultyHTML = d.difficulty ? `<span class="difficulty ${d.difficulty.toLowerCase()}">${d.difficulty}</span>` : '';
+
+    // 2. Frequency indicator
+    let freqLevel = 0;
+    if (d.frequency > 0) {
+        // Map frequency (0-100) to a level (1-4)
+        freqLevel = Math.ceil((d.frequency / 100) * 4);
+    }
+    const frequencyHTML = `
+        <div class="frequency-indicator freq-${freqLevel}" title="Frequency: ${d.frequency}/100">
+            <div class="freq-bar"></div>
+            <div class="freq-bar"></div>
+            <div class="freq-bar"></div>
+            <div class="freq-bar"></div>
+        </div>
+    `;
+
+    // 3. Combine them in a container
+    return `<div class="metadata"><div class="metadata-item">${difficultyHTML}${frequencyHTML}</div></div>`;
+}
         
         function resetToInitialState() {
             if (!scanner.classed("hidden")) return;
@@ -678,26 +703,12 @@
         
         function drawRadarBackground(rings = []) {
             radarBgGroup.selectAll("*").remove(); 
-            const ringCount = rings.length || 4; 
+            const ringCount = 4;
             const ringWidth = maxRadius / ringCount;
-            const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e", "#18182c"]; 
-
-            const radarRings = radarBgGroup.selectAll(".radar-ring")
-                .data(d3.range(ringCount - 1, -1, -1))
-                .enter().append("circle")
-                .attr("class", "radar-ring")
-                .attr("r", d => (d + 1) * ringWidth)
-                .style("fill", (d, i) => ringColors[i % ringColors.length]);
-            
-            if (rings.length > 0 && rings[rings.length - 1].toLowerCase() === 'opposites') {
-                radarRings.filter((d, i) => i === 0) 
-                    .style("stroke-dasharray", "4 4")
-                    .style("stroke", "#7a7a9f"); 
-            }
-
+            const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e"];
+            radarBgGroup.selectAll(".radar-ring").data(d3.range(ringCount - 1, -1, -1)).enter().append("circle").attr("class", "radar-ring").attr("r", d => (d + 1) * ringWidth).style("fill", (d, i) => ringColors[i]);
             radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-v").attr("x1", 0).attr("y1", -maxRadius).attr("x2", 0).attr("y2", maxRadius);
             radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-h").attr("x1", -maxRadius).attr("y1", 0).attr("x2", maxRadius).attr("y2", 0);
-            
             if(rings.length > 0) {
                 radarBgGroup.selectAll(".ring-label-path").data(rings).enter().append("path").attr("id", (d, i) => `ring-path-${i}`).attr("d", (d, i) => `M ${-(i + 0.5) * ringWidth}, 0 A ${(i + 0.5) * ringWidth},${(i + 0.5) * ringWidth} 0 0 1 ${(i + 0.5) * ringWidth},0`).style("fill", "none");
                 radarBgGroup.selectAll(".ring-label").data(rings).enter().append("text").attr("class", "ring-label").append("textPath").attr("startOffset", "50%").attr("xlink:href", (d, i) => `#ring-path-${i}`).text(d => d.toUpperCase());
@@ -727,46 +738,16 @@
                 else if (d.anchor === 'start') { if ((bbox.x + bbox.width) > rightBoundary) textElement.attr('x', parseFloat(textElement.attr('x')) - ((bbox.x + bbox.width) - rightBoundary)); }
             });
             const ringScale = d3.scaleLinear().domain([0, radarData.rings.length]).range([0, maxRadius - bubbleSizeScale.range()[1]]);
-            
-            // --- FIX 2: REVERT TO ORIGINAL ANGLE CALCULATION ---
-            // This fixes the bubble overlap by distributing antonyms into their proper facet quadrants.
-            // The `d.ring` value will still place them in the outer "Opposites" ring correctly.
             const nodes = radarData.words.map(d => {
                 const r = ringScale(d.ring + 0.5) + (Math.random() - 0.5) * (maxRadius / radarData.rings.length) * 0.5;
                 const angle = (d.facet * (Math.PI / 2)) + ((0.1 + Math.random() * 0.8) * (Math.PI / 2)) - (Math.PI / 4);
-                d.targetX = r * Math.cos(angle); 
-                d.targetY = r * Math.sin(angle); 
-                return d;
+                d.targetX = r * Math.cos(angle); d.targetY = r * Math.sin(angle); return d;
             });
-
             const simulation = d3.forceSimulation(nodes).force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 4 : 5)).strength(0.8)).force("x", d3.forceX(d => d.targetX).strength(0.1)).force("y", d3.forceY(d => d.targetY).strength(0.1)).stop();
             for (let i = 0; i < 200; ++i) simulation.tick();
             nodes.forEach(d => { d.radarX = d.x; d.radarY = d.y; });
-            
-            const polarityColor = d3.scaleSequential(d3.interpolateRdBu).domain([1, -1]);
-            
             currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term).enter().append("g").attr("class", "word-bubble");
-            
-            currentBubbles.append("circle")
-                .attr("r", 0)
-                .style("fill", d => {
-                    // --- FIX 1: REFINED COLOR LOGIC ---
-                    // Use special red/blue colors ONLY for antonyms (those in the last ring).
-                    // All other bubbles (synonyms) use the standard legend colors.
-                    const isOpposite = radarData.rings.length > 4 && d.ring === (radarData.rings.length - 1);
-                    if (isOpposite) {
-                        const polarityKey = radarData.facets[0].key;
-                        // Use the graded color if intensity is available, otherwise a default blue.
-                        return d.intensities && d.intensities[polarityKey] !== undefined ? polarityColor(d.intensities[polarityKey]) : '#1f77b4';
-                    }
-                    // This is the original, correct logic for all synonyms.
-                    return facetColors[d.facet % 10];
-                })
-                .transition()
-                .duration(500)
-                .delay((d,i) => i * 30)
-                .attr("r", d => bubbleSizeScale(d.frequency || 50));
-
+            currentBubbles.append("circle").attr("r", 0).style("fill", (d, i) => facetColors[d.facet % 10]).transition().duration(500).delay((d,i) => i * 30).attr("r", d => bubbleSizeScale(d.frequency));
             currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0).transition().duration(500).delay((d,i) => i * 30).style("opacity", 1);
             currentBubbles.attr("transform", d => `translate(${d.radarX}, ${d.radarY})`);
             setupTooltipEvents(currentBubbles);
@@ -810,9 +791,9 @@
                 legend.style("opacity", 1);
                 spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
                 radarBgGroup.selectAll(".quadrant-line, .ring-label, .ring-label-path").transition().delay(200).duration(500).style("opacity", 1);
-                const ringCount = currentRadarData ? currentRadarData.rings.length : 4;
+                const ringCount = 4;
                 const ringWidth = maxRadius / ringCount;
-                radarBgGroup.selectAll(".radar-ring").transition().delay((d,i) => 200 + (ringCount-1-i)*80).duration(500).attr("r", d => (d + 1) * ringWidth).style("opacity", 1);
+                radarBgGroup.selectAll(".radar-ring").transition().delay((d,i) => 200 + (3-i)*80).duration(500).attr("r", d => (d + 1) * ringWidth).style("opacity", 1);
                 labelsGroup.selectAll(".quadrant-label").classed("active", false);
                 labelsGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
                 if (currentBubbles) {
@@ -879,13 +860,13 @@
                 const metadataHTML = getMetadataHTML(d);
                 tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>${metadataHTML}`);
         
-                const r = tooltip.node().getBoundingClientRect(); let l = event.pageX + 15, t = event.pageY - 28;
-                if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15;
-                if (t + r.height > window.innerHeight) t = event.pageY - r.height - 15;
-                if (t < 0) t = event.pageY + 15;
-                tooltip.style("left", l + "px").style("top", t + "px");
-            }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } });
-        }
+        const r = tooltip.node().getBoundingClientRect(); let l = event.pageX + 15, t = event.pageY - 28;
+        if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15;
+        if (t + r.height > window.innerHeight) t = event.pageY - r.height - 15;
+        if (t < 0) t = event.pageY + 15;
+        tooltip.style("left", l + "px").style("top", t + "px");
+    }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } });
+}
         
         function updateLegend(facets) {
             const legendItemsContainer = d3.select("#legend-items-container");
@@ -914,21 +895,33 @@
         }
         
         function exportAsPNG() {
+            // 1. Select the DOM element you want to capture.
             const exportArea = d3.select("#chart-container").node();
+
+            // 2. Use html2canvas to render the element.
             html2canvas(exportArea, {
                 backgroundColor: '#1a1a2e',
-                scale: 2,
+                scale: 2, // Export at 2x resolution
                 logging: false,
                 useCORS: true
             }).then(canvas => {
+                
+                // --- SNIPPET TO ADD CREDIT TEXT ---
+                // a. Get the 2D drawing context of the canvas
                 const ctx = canvas.getContext('2d');
                 const text = "Word Radar by ELTcation - www.eltcation.com";
-                const padding = 25;
-                ctx.font = 'bold 24px sans-serif'; 
-                ctx.fillStyle = 'rgba(224, 224, 224, 0.6)';
-                ctx.textAlign = 'center';
-                ctx.fillText(text, canvas.width / 2, canvas.height - padding);
+                const padding = 25; // Pixel padding from the bottom edge
                 
+                // b. Set the font style. 24px works well with scale:2
+                ctx.font = 'bold 24px sans-serif'; 
+                ctx.fillStyle = 'rgba(224, 224, 224, 0.6)'; // A semi-transparent white
+                ctx.textAlign = 'center';
+                
+                // c. Draw the text at the bottom-center of the canvas
+                ctx.fillText(text, canvas.width / 2, canvas.height - padding);
+                // --- END OF SNIPPET ---
+
+                // The rest of the logic remains the same:
                 const pngUrl = canvas.toDataURL("image/png");
                 const link = document.createElement("a");
                 const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`;
@@ -943,6 +936,7 @@
                 alert("Sorry, there was an error exporting the image.");
             });
         }
+
 
         async function fetchWordData(word, partOfSpeech, category, synonyms = null) {
             try {
