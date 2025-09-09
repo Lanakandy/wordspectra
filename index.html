@@ -896,18 +896,32 @@ function getMetadataHTML(d) {
         
         function exportAsPNG() {
             // 1. Select the DOM element you want to capture.
-            // We'll capture the whole chart container.
             const exportArea = d3.select("#chart-container").node();
 
-            // 2. Use html2canvas to render the element onto a canvas.
+            // 2. Use html2canvas to render the element.
             html2canvas(exportArea, {
-                backgroundColor: '#1a1a2e', // Ensure the background color is set
-                scale: 2, // Export at 2x resolution for better quality
-                logging: false, // Suppress console logging from the library
-                useCORS: true // Important if you have external images like the logo
+                backgroundColor: '#1a1a2e',
+                scale: 2, // Export at 2x resolution
+                logging: false,
+                useCORS: true
             }).then(canvas => {
-                // The rest of the logic is the same as before:
-                // create a link and trigger the download.
+                
+                // --- SNIPPET TO ADD CREDIT TEXT ---
+                // a. Get the 2D drawing context of the canvas
+                const ctx = canvas.getContext('2d');
+                const text = "Word Radar by ELTcation - www.eltcation.com";
+                const padding = 25; // Pixel padding from the bottom edge
+                
+                // b. Set the font style. 24px works well with scale:2
+                ctx.font = 'bold 24px sans-serif'; 
+                ctx.fillStyle = 'rgba(224, 224, 224, 0.6)'; // A semi-transparent white
+                ctx.textAlign = 'center';
+                
+                // c. Draw the text at the bottom-center of the canvas
+                ctx.fillText(text, canvas.width / 2, canvas.height - padding);
+                // --- END OF SNIPPET ---
+
+                // The rest of the logic remains the same:
                 const pngUrl = canvas.toDataURL("image/png");
                 const link = document.createElement("a");
                 const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`;
@@ -916,6 +930,7 @@ function getMetadataHTML(d) {
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+
             }).catch(err => {
                 console.error("html2canvas failed:", err);
                 alert("Sorry, there was an error exporting the image.");
