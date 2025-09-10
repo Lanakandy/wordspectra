@@ -15,8 +15,7 @@ function generateCacheKey(object, prompt) {
     return createHash('sha256').update(str).digest('hex');
 }
 
-// --- NEW, REVISED LLM PROMPT ---
-function getLLMPrompt(word, partOfSpeech, category, synonyms) {
+function getLLMPrompt(word, partOfSpeech, synonyms) {
     const systemPrompt = `You are a linguist creating a Word Radar visualization dataset for language learners. You will be given a hub word, a part of speech, and a list of related words.
 
 REQUIREMENTS:
@@ -55,17 +54,8 @@ Return ONLY valid JSON.`;
 
     let userPrompt = `Hub Word: "${word}"\nPart of Speech: "${partOfSpeech}"\n\nSynonyms to filter and classify:\n[${synonyms.map(s => `"${s}"`).join(', ')}]`;
     
-    // The category input is less relevant now with fixed axes, but can be kept for future use or to slightly influence results.
-    if (category) {
-        userPrompt += `\n\nFocus Category (for context): "${category}"`;
-    }
-    
     return { systemPrompt, userPrompt };
 }
-
-
-// --- The rest of the file remains largely the same ---
-// The sense processing, caching, and API call logic are all still valid.
 
 function cleanDefinition(definition) {
     return definition
@@ -162,9 +152,9 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
-async function getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) {
-    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
-    const cacheKey = generateCacheKey({ word, partOfSpeech, category, synonyms }, systemPrompt);
+async function getCachedLlmResponse({ word, partOfSpeech, synonyms }, store) { // <-- to
+    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, synonyms); // <-- to
+    const cacheKey = generateCacheKey({ word, partOfSpeech, synonyms }, systemPrompt); // <-- to
     
     try {
         const cachedData = await store.get(cacheKey, { type: "json" });
@@ -196,7 +186,7 @@ exports.handler = async (event, context) => {
 
     try {
         const body = JSON.parse(event.body || '{}');
-        const { word, partOfSpeech, category, synonyms } = body;
+        const { word, partOfSpeech, synonyms } = body;
         
         if (!word || !partOfSpeech) return { statusCode: 400, headers, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         
