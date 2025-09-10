@@ -1,397 +1,717 @@
-<!-- The HTML and CSS parts of index.html remain the same. -->
-<!-- Replace the entire <script> tag with the following: -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // --- D3 selections and initial setup (mostly unchanged) ---
-    const mainTitle = d3.select("#main-title");
-    const inputContainer = d3.select("#input-container");
-    const wordForm = d3.select("#word-form");
-    const scanner = d3.select("#radar-scanner");
-    const tooltip = d3.select(".tooltip");
-    const legend = d3.select("#legend");
-    const senseSelector = d3.select("#sense-selector");
-    const restartBtn = d3.select("#restart-btn");
-    const exportBtn = d3.select("#export-btn");
-    
-    const container = d3.select("#chart-container");
-    const containerRect = container.node().getBoundingClientRect();
-    const width = containerRect.width;
-    const height = containerRect.height;
-    
-    const isMobile = window.innerWidth <= 768;
-    const margin = isMobile ? 65 : 100;
-    const maxRadius = (Math.min(width, height) / 2) - margin;
-    
-    const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
-        .on("click", (event) => {
-            if (selectedWords.length > 0) { clearComparison(); } 
-            else if (currentView !== 'radar') { event.stopPropagation(); switchToRadarView(); }
-        });
-    const chartGroup = svg.append("g").attr("transform", `translate(${width / 2}, ${height / 2})`);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- The following line is crucial. It imports the D3.js library. -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Radar</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        /* All CSS styles remain exactly the same */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
 
-    // --- MODIFIED STATE AND SCALES ---
-    let currentView = 'radar', activeSpectrumAxis = null, currentBubbles = null, currentClineBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null;
+        #input-container { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px; /* Spacing between inputs */
+        }
 
-    const difficultyColors = { 'beginner': '#4CAF50', 'intermediate': '#FF9800', 'advanced': '#F44336' };
-    const antonymColor = '#9467bd'; // A distinct color for opposites
+        #word-input { 
+            background: rgba(255, 255, 255, 0.1); 
+            border: 2px solid #9a9ac8; 
+            border-radius: 8px; 
+            color: white; 
+            font-size: clamp(16px, 5vw, 24px); 
+            font-weight: bold; 
+            text-align: center; 
+            padding: clamp(8px, 2vw, 10px) clamp(15px, 4vw, 20px); 
+            width: clamp(220px, 60vw, 300px); 
+            outline: none; 
+            transition: all 0.2s ease; 
+            -webkit-text-size-adjust: 100%; 
+        }
+        #word-input:focus { background: rgba(255, 255, 255, 0.2); transform: scale(1.05); }
 
-    const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 20] : [8, 30]);
-    const scoreToPixelScale = d3.scaleLinear().domain([-1, 1]).range([-maxRadius, maxRadius]).clamp(true);
-    
-    const largestBubbleRadius = bubbleSizeScale.range()[1];
-    const spectrumRange = maxRadius * 0.75;
-    const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]).clamp(true);
+        #pos-selector {
+            display: flex;
+            gap: 10px;
+        }
+        .pos-option {
+            background: rgba(40, 40, 60, 0.9);
+            border: 1px solid #9a9ac8;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: clamp(12px, 3vw, 14px);
+            font-weight: 600;
+            color: #e0e0e0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .pos-option:hover {
+            background: rgba(255, 107, 71, 0.9);
+        }
+        .pos-option.selected {
+            background-color: #FF6B47;
+            color: #1a1a2e;
+            border-color: #FF6B47;
+            transform: scale(1.05);
+        }
 
-    const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
-    const spectrumGroup = chartGroup.append("g").attr("class", "spectrum-view").style("opacity", 0).attr("pointer-events", "none");
-    const bubblesGroup = chartGroup.append("g").attr("class", "bubbles-container");
-    const clineBubblesGroup = chartGroup.append("g").attr("class", "cline-bubbles-container");
-    const labelsGroup = chartGroup.append("g").attr("class", "labels-container");
-    
-    const submitBtn = d3.select("#submit-btn");
-    let currentSearch = { word: '', partOfSpeech: '', category: '' };
-    
-    drawRadarBackground();
-    drawSpectrumView();
-    
-    // --- Event listeners (unchanged) ---
-    wordForm.on("submit", handleFormSubmit);
-    submitBtn.on("click", (event) => { event.preventDefault(); handleFormSubmit(event); });
-    d3.selectAll('#category-input, #custom-words-input').on('keydown', function(event) { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleFormSubmit(event); }});
-    d3.select('#word-input').on('input', updateSubmitButtonState);
-    d3.selectAll('.pos-option').on('click', function() { d3.selectAll('.pos-option').classed('selected', false); d3.select(this).classed('selected', true); updateSubmitButtonState(); });
-    mainTitle.on("click", resetToInitialState);
-    setupSoundToggle();
-    restartBtn.on("click", resetToInitialState);
-    exportBtn.on("click", exportAsPNG);
+        #category-input, #custom-words-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px dashed #7a7a9f;
+            border-radius: 8px;
+            color: white;
+            font-size: clamp(12px, 3.5vw, 14px);
+            text-align: center;
+            padding: 8px 15px;
+            width: clamp(220px, 60vw, 300px);
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        #category-input::placeholder, #custom-words-input::placeholder {
+            color: #9a9ac8;
+            opacity: 0.7;
+        }
+        #category-input:focus, #custom-words-input:focus {
+            background: rgba(255, 255, 255, 0.1);
+            border-style: solid;
+        }
+        #custom-words-input {
+            resize: vertical;
+            height: 60px;
+            text-align: left;
+            padding: 10px;
+        }
 
-    // --- Form handling and data fetching (unchanged, but now receives new data structure) ---
-    // ... [ The functions updateSubmitButtonState, handleFormSubmit, handleSenseSelection are functionally the same ] ...
-    function updateSubmitButtonState() { const word = d3.select("#word-input").property("value").trim(); const posSelected = d3.select(".pos-option.selected").node(); if (word && posSelected) { submitBtn.classed("hidden", false); } else { submitBtn.classed("hidden", true); } }
-    async function handleFormSubmit(event) {
-        event.preventDefault();
-        currentSearch.word = d3.select("#word-input").property("value").trim();
-        const selectedPosNode = d3.select(".pos-option.selected").node();
-        currentSearch.category = d3.select("#category-input").property("value").trim();
-        const customWords = d3.select("#custom-words-input").property("value").trim();
-        if (!currentSearch.word) { alert("Please enter a word."); return; }
-        if (!selectedPosNode) { alert("Please select a part of speech."); return; }
-        currentSearch.partOfSpeech = selectedPosNode.dataset.pos;
-        if (currentView !== 'radar') { await switchToRadarView(); }
-        inputContainer.classed("hidden", true);
-        legend.classed("hidden", true);
-        clearChart();
-        if (customWords) { const synonyms = customWords.split(',').map(s => s.trim()).filter(Boolean); if (synonyms.length > 0) { handleSenseSelection(synonyms); return; } }
-        mainTitle.style("cursor", "default").text(`Discovering meanings for "${currentSearch.word}"...`);
-        scanner.classed("hidden", false);
-        const discoveryData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category);
-        if (discoveryData && discoveryData.senses) {
-            scanner.classed("hidden", true);
-            mainTitle.text("Please select a meaning to explore");
-            senseSelector.select("#sense-title").text(`Which meaning of "${currentSearch.word}"?`);
-            senseSelector.select("#sense-options").selectAll("*").remove();
-            const primaryOptions = senseSelector.select("#sense-options").selectAll(".primary-sense").data(discoveryData.senses);
-            primaryOptions.enter().append("button").attr("class", "sense-option-btn primary-sense").text(d => `"${d.synonyms.slice(0, 3).join('", "')}" ${d.synonyms.length > 3 ? `(+${d.synonyms.length - 3} more)` : ''} — ${d.definition}`).on("click", (e, d) => handleSenseSelection(d.synonyms));
-            if (discoveryData.hasMore && discoveryData.additionalSenses) {
-                const showMoreContainer = senseSelector.select("#sense-options").append("div").attr("id", "show-more-container");
-                showMoreContainer.append("div").attr("id", "show-more-btn").text(`+ Show ${discoveryData.additionalSenses.length} more specific meanings`).on("click", function() { const additionalContainer = d3.select("#additional-senses"); const isExpanded = additionalContainer.classed("expanded"); additionalContainer.classed("expanded", !isExpanded); d3.select(this).text(isExpanded ? `+ Show ${discoveryData.additionalSenses.length} more specific meanings` : "− Show fewer meanings"); });
-                showMoreContainer.append("div").attr("class", "sense-divider");
-                const additionalContainer = showMoreContainer.append("div").attr("id", "additional-senses").attr("class", "additional-senses");
-                const additionalOptions = additionalContainer.selectAll(".additional-sense").data(discoveryData.additionalSenses);
-                additionalOptions.enter().append("button").attr("class", "sense-option-btn additional-sense").style("opacity", "0.8").style("font-size", "clamp(13px, 3vw, 15px)").text(d => `"${d.synonyms.slice(0, 2).join('", "')}" ${d.synonyms.length > 2 ? `(+${d.synonyms.length - 2})` : ''} — ${d.definition}`).on("click", (e, d) => handleSenseSelection(d.synonyms));
+        #submit-btn {
+            background-color: #FF6B47;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: clamp(14px, 4vw, 16px);
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.2s ease;
+            width: clamp(220px, 60vw, 300px);
+        }
+        #submit-btn:hover {
+            transform: scale(1.05);
+            background-color: #ffca85;
+        }
+        #sense-selector {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: rgba(40, 40, 60, 0.95);
+            border: 1px solid #9a9ac8;
+            border-radius: 12px;
+            padding: clamp(20px, 5vw, 30px);
+            max-height: 85vh;
+            max-width: clamp(300px, 80vw, 500px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #sense-title {
+            margin: 0 0 10px 0;
+            font-size: clamp(16px, 4vw, 20px);
+            text-align: center;
+        }
+        #sense-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            overflow-y: auto;
+            padding-right: 10px;
+            margin-right: -10px;
+        }
+
+        #sense-options::-webkit-scrollbar { width: 8px; }
+        #sense-options::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); border-radius: 4px; }
+        #sense-options::-webkit-scrollbar-thumb { background-color: #7a7a9f; border-radius: 4px; }
+        #sense-options::-webkit-scrollbar-thumb:hover { background-color: #9a9ac8; }
+        
+        .sense-option-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #7a7a9f;
+            border-radius: 8px;
+            padding: 12px;
+            color: #e0e0e0;
+            font-size: clamp(14px, 3.5vw, 16px);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+        .sense-option-btn:hover {
+            background: rgba(255, 107, 71, 0.9);
+            border-color: #FF6B47;
+            color: #1a1a2e;
+        }
+
+        #show-more-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px dashed #7a7a9f;
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: #9a9ac8;
+            font-size: clamp(12px, 3vw, 14px);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+            margin-top: 5px;
+            font-style: italic;
+        }
+        #show-more-btn:hover { background: rgba(255, 255, 255, 0.1); border-color: #FF6B47; color: #FF6B47; }
+        .additional-senses { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .additional-senses.expanded { max-height: 400px; }
+        .sense-divider { height: 1px; background: linear-gradient(to right, transparent, #7a7a9f, transparent); margin: 15px 0 10px 0; }
+        
+        @media (max-width: 768px) { 
+            #word-input { font-size: 16px; padding: 12px 16px; width: min(80vw, 300px); } 
+            #input-container { gap: 12px; }
+            .pos-option { padding: 6px 12px; font-size: 12px; }
+            #category-input, #custom-words-input { font-size: 12px; padding: 8px 12px; width: min(80vw, 300px); }
+        }
+
+        .header-logo { position: absolute; top: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); width: clamp(60px, 12vw, 90px); opacity: 1; transition: opacity 0.2s; }
+        .header-logo:hover { opacity: 0.7; }
+        
+        #top-right-controls { position: absolute; top: clamp(10px, 2vh, 20px); right: clamp(10px, 2vw, 20px); display: flex; flex-direction: column; gap: 8px; align-items: flex-end; z-index: 100; }
+        .control-btn { background: rgba(40, 40, 60, 0.9); border: 1px solid #9a9ac8; border-radius: 8px; padding: 6px 10px; display: flex; align-items: center; cursor: pointer; backdrop-filter: blur(5px); transition: all 0.2s; min-width: 130px; justify-content: center; }
+        .control-btn:hover { background: rgba(60, 60, 80, 0.9); }
+        .control-btn .control-icon { width: clamp(16px, 4vw, 20px); height: clamp(16px, 4vw, 20px); margin-right: 8px; fill: #c0c0e0; }
+        .control-btn .control-label { font-size: clamp(10px, 2.5vw, 12px); font-weight: 600; color: #e0e0e0; }
+        #sound-toggle.sound-off .slash-icon { display: block; }
+        #sound-toggle.sound-off path:not(.slash-icon) { opacity: 0.4; }
+        #sound-toggle .slash-icon { display: none; }
+        
+        h1 { color: #ffffff; font-weight: 300; text-align: center; cursor: pointer; transition: color 0.2s; font-size: clamp(1.2rem, 4vw, 2rem); margin: clamp(10px, 2vh, 20px) 10px; padding: 0 10px; }
+        h1:hover { color: #ffca85; }
+        #chart-container { position: relative; width: calc(100vw - 20px); height: calc(100vh - 80px); max-width: 800px; max-height: 800px; min-width: 300px; min-height: 300px; }
+        @media (max-width: 768px) { #chart-container { width: calc(100vw - 10px); height: calc(100vh - 60px); } h1 { font-size: clamp(1rem, 5vw, 1.5rem); margin: 5px; } }
+        @media (max-height: 600px) { #chart-container { height: calc(100vh - 40px); } h1 { margin: 5px; } }
+        .hidden { display: none !important; }
+        #radar-scanner { position: absolute; top: 5%; left: 50%; margin-left: -1px; width: 2px; height: 45%; background: linear-gradient(to top, rgba(255, 107, 71, 0.8) 0%, rgba(255, 107, 71, 0) 100%); transform-origin: bottom center; animation: spin 3s linear infinite; z-index: 5; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .radar-background, .spectrum-view { transition: opacity 0.5s ease-in-out; }
+        .radar-ring { stroke: #4f4f7a; stroke-width: 1px; fill: none; /* Make rings outlines only */ transition: r 0.5s ease-out, opacity 0.5s ease-out; }
+        .quadrant-line { stroke: #5f5f8a; stroke-width: 1.5px; transition: all 0.5s ease-out; }
+        .ring-label { fill: #6a6a8f; font-size: clamp(10px, 2vw, 12px); font-family: monospace; text-transform: uppercase; pointer-events: none; }
+        .quadrant-label { fill: #c0c0e0; font-size: clamp(12px, 3vw, 14px); font-weight: 600; text-transform: uppercase; cursor: pointer; transition: fill 0.2s ease-in-out, opacity 0.5s ease-in-out; }
+        .quadrant-label:hover { fill: #ffca85; }
+        .quadrant-label.active { fill: #ffca85; font-weight: 700; }
+        .spectrum-axis { stroke: #9a9ac8; stroke-width: 2px; stroke-dasharray: 4 4; }
+        .spectrum-label { fill: #c0c0e0; font-size: clamp(12px, 3vw, 14px); font-weight: 600; text-transform: uppercase; text-anchor: middle; }
+        .word-bubble { transition: opacity 0.5s ease-in-out, transform 0.75s ease-out; cursor: pointer; }
+        .word-bubble circle { cursor: pointer; transition: transform 0.2s ease-out, stroke-width 0.2s ease-out, stroke 0.2s ease-out; stroke: #1a1a2e; stroke-width: 2px; }
+        .word-bubble:hover circle { transform: scale(1.1); stroke: #ffffff; stroke-width: 3px; }
+        .word-bubble.selected circle { stroke: #ffca85; stroke-width: 4px; transform: scale(1.15); }
+        .word-bubble.dimmed { opacity: 0.25; pointer-events: none; }
+        .word-bubble text { fill: #ffffff; font-size: clamp(10px, 2.5vw, 12px); font-weight: bold; text-anchor: middle; pointer-events: none; text-shadow: 0 0 4px #000000; }
+        @media (max-width: 768px) { .word-bubble:active circle { transform: scale(1.15); stroke: #ffffff; stroke-width: 3px; } .quadrant-label:active { fill: #ffca85; } }
+        .tooltip { position: absolute; background-color: rgba(40, 40, 60, 0.95); border: 1px solid #9a9ac8; border-radius: 8px; padding: clamp(8px, 2vw, 12px); color: #e0e0e0; opacity: 0; pointer-events: none; transition: opacity 0.2s; max-width: clamp(220px, 70vw, 280px); font-size: clamp(12px, 3vw, 14px); box-shadow: 0 4px 15px rgba(0,0,0,0.4); backdrop-filter: blur(5px); z-index: 1000; }
+        .tooltip h3 { margin: 0 0 4px 0; color: #ffffff; font-size: clamp(14px, 3.5vw, 16px); }
+        .tooltip p { margin: 0 0 8px 0; font-style: italic; color: #c0c0e0; line-height: 1.3; }
+        .tooltip .example { font-style: normal; background-color: rgba(0,0,0,0.2); padding: 4px; border-radius: 4px; font-family: monospace; font-size: clamp(11px, 2.5vw, 13px); }
+        .tooltip .metadata { margin-top: 6px; padding-top: 6px; border-top: 1px solid #555; font-size: clamp(10px, 2.5vw, 12px); }
+        .tooltip .difficulty { display: inline-block; padding: 2px 4px; border-radius: 3px; font-size: clamp(8px, 2vw, 10px); font-weight: bold; text-transform: uppercase; }
+        .difficulty.beginner { background-color: #4CAF50; color: white; }
+        .difficulty.intermediate { background-color: #FF9800; color: white; }
+        .difficulty.advanced { background-color: #F44336; color: white; }
+        .comparison-tooltip { max-width: clamp(300px, 90vw, 500px); }
+        .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .comparison-col h4 { margin: 0 0 5px; color: #ffca85; }
+        .comparison-col p { font-size: clamp(11px, 2.8vw, 13px); }
+        .comparison-close { position: absolute; top: 8px; right: 10px; cursor: pointer; font-size: 18px; color: #aaa; }
+        .comparison-close:hover { color: white; }
+        
+        @media (max-width: 768px) {
+            .comparison-tooltip { width: 90vw; max-width: 90vw; left: 5vw !important; top: 50% !important; transform: translateY(-50%) !important; }
+            .comparison-grid { grid-template-columns: 1fr; gap: 15px; }
+        }
+        .metadata-item { display: flex; align-items: center; gap: 8px; }
+        .frequency-indicator { display: flex; align-items: flex-end; gap: 2px; height: 12px; }
+        .freq-bar { width: 4px; background-color: #555; border-radius: 1px; transition: all 0.2s; }
+        .freq-bar:nth-child(1) { height: 40%; }
+        .freq-bar:nth-child(2) { height: 60%; }
+        .freq-bar:nth-child(3) { height: 80%; }
+        .freq-bar:nth-child(4) { height: 100%; }
+        .freq-1 .freq-bar:nth-child(-n+1),
+        .freq-2 .freq-bar:nth-child(-n+2),
+        .freq-3 .freq-bar:nth-child(-n+3),
+        .freq-4 .freq-bar:nth-child(-n+4) { background-color: #9a9ac8; }
+        
+        #legend { position: absolute; bottom: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); background: rgba(40, 40, 60, 0.9); border: 1px solid #9a9ac8; border-radius: 8px; padding: clamp(10px, 2vw, 15px); font-size: clamp(10px, 2.5vw, 12px); color: #e0e0e0; max-width: clamp(150px, 35vw, 200px); backdrop-filter: blur(5px); transition: opacity 0.5s ease-in-out; }
+        #legend h4 { margin: 0 0 8px 0; color: #ffffff; font-size: clamp(12px, 3vw, 14px); }
+        #legend .legend-item { margin: 6px 0; display: flex; align-items: center; }
+        #legend .legend-circle { width: clamp(8px, 2vw, 12px); height: clamp(8px, 2vw, 12px); border-radius: 50%; margin-right: 6px; flex-shrink: 0; }
+        #legend .legend-size-demo { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+        #legend .size-circle { border-radius: 50%; }
+        @media (max-width: 768px) { #legend { bottom: 5px; left: 5px; padding: 8px; max-width: min(40vw, 180px); font-size: 10px; } #legend h4 { font-size: 11px; margin-bottom: 6px; } #legend .legend-item { margin: 4px 0; } }
+        @media (max-height: 600px) { #legend { display: none; } }
+    </style>
+</head>
+<body>
+    <!-- All body HTML elements (header, controls, input form, etc.) remain the same -->
+    <img src="https://eltcation.com/wp-content/uploads/2025/06/ELTcation_left.png" alt="ELTcation Logo" class="header-logo">
+    
+    <div id="top-right-controls">
+        <div id="sound-toggle" class="control-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
+                <path d="M16.364 3.636a1 1 0 0 1 0 1.414l-1.414 1.414a5 5 0 0 0 0 7.072l1.414 1.414a1 1 0 0 1-1.414 1.414l-1.414-1.414a7 7 0 0 1 0-9.898l1.414-1.414a1 1 0 0 1 1.414 0zM12 5.05L12 19.05a1 1 0 0 1-1.638.766L6 15H3a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1h3l4.362-4.816A1 1 0 0 1 12 5.05zm7.07 7.07a1 1 0 0 1-1.414-1.414l1.414-1.414a3 3 0 0 0 0-4.242l-1.414-1.414a1 1 0 1 1 1.414-1.414l1.414 1.414a5 5 0 0 1 0 7.07z"/>
+                <path class="slash-icon" d="M4.707 3.293a1 1 0 0 1 1.414 0l14.293 14.293a1 1 0 0 1-1.414 1.414L3.293 4.707a1 1 0 0 1 0-1.414z"/>
+            </svg>
+            <span class="control-label">Sound ON</span>
+        </div>
+        <div id="export-btn" class="control-btn hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
+                <path d="M12 16a1 1 0 0 1-1-1V4a1 1 0 1 1 2 0v11a1 1 0 0 1-1 1zm0 2a1 1 0 0 1-.707-.293l-4-4a1 1 0 1 1 1.414-1.414L12 15.586l3.293-3.293a1 1 0 1 1 1.414 1.414l-4 4A1 1 0 0 1 12 18zm-8 4a1 1 0 0 1-1-1V7a1 1 0 1 1 2 0v13H4zM20 7a1 1 0 1 1-2 0v13h-2a1 1 0 1 1 0-2h2V7z"/>
+            </svg>
+            <span class="control-label">Export PNG</span>
+        </div>
+        <div id="restart-btn" class="control-btn hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
+                <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3.293-2.293a1 1 0 0 1 0-1.414l.707-.707A5.001 5.001 0 0 1 12 7a5 5 0 0 1 5 5h-2a3 3 0 0 0-3-3 3 3 0 0 0-2.121.879l.707.707a1 1 0 1 1-1.414 1.414l-2-2a1 1 0 0 1 0-1.414l2-2a1 1 0 1 1 1.414 1.414l-.707.707A7.001 7.001 0 0 1 12 5a7 7 0 0 1 7 7h2a9 9 0 0 0-9-9 9 9 0 0 0-6.364 15.364l-.707.707a1 1 0 0 1-1.414 0z"/>
+            </svg>
+            <span class="control-label">New Word</span>
+        </div>
+    </div>
+
+    <h1 id="main-title">Enter a word to build its Radar</h1>
+    <div id="chart-container">
+        <div id="input-container">
+            <form id="word-form">
+                <input type="text" id="word-input" placeholder="e.g., see" autocomplete="off">
+            </form>
+            <div id="pos-selector">
+                <div class="pos-option" data-pos="verb">Verb</div>
+                <div class="pos-option" data-pos="noun">Noun</div>
+                <div class="pos-option" data-pos="adjective">Adjective</div>
+            </div>
+            <input type="text" id="category-input" placeholder="Optional category (e.g., complexity)">
+            <textarea id="custom-words-input" placeholder="Custom Words: Paste comma-separated words to classify instead of using the thesaurus."></textarea>
+            <button id="submit-btn" class="hidden">Start</button>
+        </div>
+        <div id="sense-selector" class="hidden">
+            <h3 id="sense-title">Which meaning of "word"?</h3>
+            <div id="sense-options"></div>
+        </div>
+        <div id="radar-scanner" class="hidden"></div>
+        <div id="legend" class="hidden">
+            <h4>Legend</h4>
+            <div id="legend-items-container"></div>
+            <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #555;"><div style="margin-bottom: 5px;"><strong>Bubble Size:</strong></div><div class="legend-size-demo"><div class="size-circle" style="width: 8px; height: 8px; background-color: #666;"></div><span style="font-size: 10px;">Rare</span></div><div class="legend-size-demo"><div class="size-circle" style="width: 16px; height: 16px; background-color: #666;"></div><span style="font-size: 10px;">Common</span></div><div class="legend-size-demo"><div class="size-circle" style="width: 24px; height: 24px; background-color: #666;"></div><span style="font-size: 10px;">Very Common</span></div></div>
+        </div>
+    </div>
+    <div class="tooltip"></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- D3 selections and initial setup ---
+        const mainTitle = d3.select("#main-title");
+        const inputContainer = d3.select("#input-container");
+        const wordForm = d3.select("#word-form");
+        const scanner = d3.select("#radar-scanner");
+        const tooltip = d3.select(".tooltip");
+        const legend = d3.select("#legend");
+        const senseSelector = d3.select("#sense-selector");
+        const restartBtn = d3.select("#restart-btn");
+        const exportBtn = d3.select("#export-btn");
+        
+        const container = d3.select("#chart-container");
+        const containerRect = container.node().getBoundingClientRect();
+        const width = containerRect.width;
+        const height = containerRect.height;
+        
+        const isMobile = window.innerWidth <= 768;
+        const margin = isMobile ? 65 : 100;
+        const maxRadius = (Math.min(width, height) / 2) - margin;
+        
+        const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
+            .on("click", (event) => {
+                if (selectedWords.length > 0) { clearComparison(); } 
+                else if (currentView !== 'radar') { event.stopPropagation(); switchToRadarView(); }
+            });
+        const chartGroup = svg.append("g").attr("transform", `translate(${width / 2}, ${height / 2})`);
+
+        // --- State and Scales ---
+        let currentView = 'radar', activeSpectrumAxis = null, currentBubbles = null, currentClineBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null;
+
+        const difficultyColors = { 'beginner': '#4CAF50', 'intermediate': '#FF9800', 'advanced': '#F44336' };
+        const antonymColor = '#9467bd';
+
+        const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 20] : [8, 30]);
+        const scoreToPixelScale = d3.scaleLinear().domain([-1, 1]).range([-maxRadius, maxRadius]).clamp(true);
+        
+        const largestBubbleRadius = bubbleSizeScale.range()[1];
+        const spectrumRange = maxRadius * 0.75;
+        const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange + largestBubbleRadius, spectrumRange - largestBubbleRadius]).clamp(true);
+
+        const radarBgGroup = chartGroup.append("g").attr("class", "radar-background");
+        const spectrumGroup = chartGroup.append("g").attr("class", "spectrum-view").style("opacity", 0).attr("pointer-events", "none");
+        const bubblesGroup = chartGroup.append("g").attr("class", "bubbles-container");
+        const clineBubblesGroup = chartGroup.append("g").attr("class", "cline-bubbles-container");
+        const labelsGroup = chartGroup.append("g").attr("class", "labels-container");
+        
+        const submitBtn = d3.select("#submit-btn");
+        let currentSearch = { word: '', partOfSpeech: '', category: '' };
+        
+        drawRadarBackground();
+        drawSpectrumView();
+        
+        // --- Event listeners ---
+        wordForm.on("submit", handleFormSubmit);
+        submitBtn.on("click", (event) => { event.preventDefault(); handleFormSubmit(event); });
+        d3.selectAll('#category-input, #custom-words-input').on('keydown', function(event) { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleFormSubmit(event); }});
+        d3.select('#word-input').on('input', updateSubmitButtonState);
+        d3.selectAll('.pos-option').on('click', function() { d3.selectAll('.pos-option').classed('selected', false); d3.select(this).classed('selected', true); updateSubmitButtonState(); });
+        mainTitle.on("click", resetToInitialState);
+        setupSoundToggle();
+        restartBtn.on("click", resetToInitialState);
+        exportBtn.on("click", exportAsPNG);
+
+        function updateSubmitButtonState() { const word = d3.select("#word-input").property("value").trim(); const posSelected = d3.select(".pos-option.selected").node(); if (word && posSelected) { submitBtn.classed("hidden", false); } else { submitBtn.classed("hidden", true); } }
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+            currentSearch.word = d3.select("#word-input").property("value").trim();
+            const selectedPosNode = d3.select(".pos-option.selected").node();
+            currentSearch.category = d3.select("#category-input").property("value").trim();
+            const customWords = d3.select("#custom-words-input").property("value").trim();
+            if (!currentSearch.word) { alert("Please enter a word."); return; }
+            if (!selectedPosNode) { alert("Please select a part of speech."); return; }
+            currentSearch.partOfSpeech = selectedPosNode.dataset.pos;
+            if (currentView !== 'radar') { await switchToRadarView(); }
+            inputContainer.classed("hidden", true);
+            legend.classed("hidden", true);
+            clearChart();
+            if (customWords) { const synonyms = customWords.split(',').map(s => s.trim()).filter(Boolean); if (synonyms.length > 0) { handleSenseSelection(synonyms); return; } }
+            mainTitle.style("cursor", "default").text(`Discovering meanings for "${currentSearch.word}"...`);
+            scanner.classed("hidden", false);
+            const discoveryData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category);
+            if (discoveryData && discoveryData.senses) {
+                scanner.classed("hidden", true);
+                mainTitle.text("Please select a meaning to explore");
+                senseSelector.select("#sense-title").text(`Which meaning of "${currentSearch.word}"?`);
+                senseSelector.select("#sense-options").selectAll("*").remove();
+                const primaryOptions = senseSelector.select("#sense-options").selectAll(".primary-sense").data(discoveryData.senses);
+                primaryOptions.enter().append("button").attr("class", "sense-option-btn primary-sense").text(d => `"${d.synonyms.slice(0, 3).join('", "')}" ${d.synonyms.length > 3 ? `(+${d.synonyms.length - 3} more)` : ''} — ${d.definition}`).on("click", (e, d) => handleSenseSelection(d.synonyms));
+                if (discoveryData.hasMore && discoveryData.additionalSenses) {
+                    const showMoreContainer = senseSelector.select("#sense-options").append("div").attr("id", "show-more-container");
+                    showMoreContainer.append("div").attr("id", "show-more-btn").text(`+ Show ${discoveryData.additionalSenses.length} more specific meanings`).on("click", function() { const additionalContainer = d3.select("#additional-senses"); const isExpanded = additionalContainer.classed("expanded"); additionalContainer.classed("expanded", !isExpanded); d3.select(this).text(isExpanded ? `+ Show ${discoveryData.additionalSenses.length} more specific meanings` : "− Show fewer meanings"); });
+                    showMoreContainer.append("div").attr("class", "sense-divider");
+                    const additionalContainer = showMoreContainer.append("div").attr("id", "additional-senses").attr("class", "additional-senses");
+                    const additionalOptions = additionalContainer.selectAll(".additional-sense").data(discoveryData.additionalSenses);
+                    additionalOptions.enter().append("button").attr("class", "sense-option-btn additional-sense").style("opacity", "0.8").style("font-size", "clamp(13px, 3vw, 15px)").text(d => `"${d.synonyms.slice(0, 2).join('", "')}" ${d.synonyms.length > 2 ? `(+${d.synonyms.length - 2})` : ''} — ${d.definition}`).on("click", (e, d) => handleSenseSelection(d.synonyms));
+                }
+                senseSelector.classed("hidden", false);
+            } else if (discoveryData && discoveryData.synonyms) {
+                processAndDrawRadar(discoveryData);
+            } else {
+                scanner.classed("hidden", true);
+                mainTitle.text(discoveryData.error || `No data for "${currentSearch.word}". Click to try again.`).style("cursor", "pointer");
+                restartBtn.classed("hidden", false);
             }
-            senseSelector.classed("hidden", false);
-        } else if (discoveryData && discoveryData.synonyms) {
-            processAndDrawRadar(discoveryData);
-        } else {
+        }
+        async function handleSenseSelection(synonyms) {
+            senseSelector.classed("hidden", true);
+            mainTitle.style("cursor", "default").text(`Generating Radar for "${currentSearch.word}"...`);
+            scanner.classed("hidden", false);
+            const wordData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category, synonyms);
+            if (wordData && wordData.synonyms) {
+                processAndDrawRadar(wordData);
+            } else {
+                scanner.classed("hidden", true);
+                mainTitle.text(wordData.error || `No data for "${currentSearch.word}". Click to try again.`).style("cursor", "pointer");
+                restartBtn.classed("hidden", false);
+            }
+        }
+        
+        function processAndDrawRadar(wordData) {
             scanner.classed("hidden", true);
-            mainTitle.text(discoveryData.error || `No data for "${currentSearch.word}". Click to try again.`).style("cursor", "pointer");
+            currentRadarData = wordData;
+            mainTitle.text(`Word Radar: "${wordData.hub_word}"`).style("cursor", "pointer");
+            updateLegend();
+            drawRadarBackground(wordData.axes);
+            drawWordBubbles(wordData);
+            legend.classed("hidden", false);
             restartBtn.classed("hidden", false);
+            exportBtn.classed("hidden", false);
         }
-    }
-    async function handleSenseSelection(synonyms) {
-        senseSelector.classed("hidden", true);
-        mainTitle.style("cursor", "default").text(`Generating Radar for "${currentSearch.word}"...`);
-        scanner.classed("hidden", false);
-        const wordData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category, synonyms);
-        if (wordData && wordData.synonyms) {
-            processAndDrawRadar(wordData);
-        } else {
+        
+        function clearChart() {
+            clearComparison();
+            if (currentBubbles) currentBubbles.remove();
+            if (currentClineBubbles) currentClineBubbles.remove();
+            labelsGroup.selectAll("*").remove(); // Clear all labels
+            d3.select("#legend-items-container").selectAll("*").remove(); 
+        }
+        
+        function drawWordBubbles(radarData) {
+            // 1. Draw Static Axis Labels
+            const labelOffset = maxRadius + (isMobile ? 15 : 25);
+            labelsGroup.append("text").attr("class", "quadrant-label").attr("x", 0).attr("y", -labelOffset).attr("text-anchor", "middle").text("FORMALITY").on("click", e => toggleSpectrumView('formality', radarData.axes.y));
+            labelsGroup.append("text").attr("class", "quadrant-label").attr("x", labelOffset).attr("y", 0).attr("dominant-baseline", "middle").attr("text-anchor", "start").text("STYLE").on("click", e => toggleSpectrumView('style', radarData.axes.x));
+            
+            // 2. Position and draw synonym bubbles
+            const synonymNodes = radarData.synonyms.map(d => {
+                d.radarX = scoreToPixelScale(d.style);
+                d.radarY = -scoreToPixelScale(d.formality); // Y is inverted in SVG
+                d.isAntonym = false;
+                return d;
+            });
+            
+            const simulation = d3.forceSimulation(synonymNodes)
+                .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 3).strength(0.9))
+                .force("x", d3.forceX(d => d.radarX).strength(0.2))
+                .force("y", d3.forceY(d => d.radarY).strength(0.2))
+                .stop();
+            for (let i = 0; i < 150; ++i) simulation.tick();
+            
+            // 3. Position and draw antonym bubbles outside the radar
+            const antonymRadius = maxRadius * 1.15;
+            const numAntonyms = radarData.antonyms.length;
+            const antonymNodes = radarData.antonyms.map((d, i) => {
+                // Distribute antonyms in the four corners
+                const angle = (Math.PI / 4) + (i * Math.PI / 2) + (Math.random() - 0.5) * 0.2;
+                d.x = antonymRadius * Math.cos(angle);
+                d.y = antonymRadius * Math.sin(angle);
+                d.isAntonym = true;
+                d.frequency = 50;
+                d.difficulty = 'intermediate';
+                d.definition = 'An opposite of the main word.';
+                d.example = `Click to see a scale from '${d.term}' to '${radarData.hub_word}'.`;
+                return d;
+            });
+            
+            const allNodes = [...synonymNodes, ...antonymNodes];
+
+            currentBubbles = bubblesGroup.selectAll(".word-bubble")
+                .data(allNodes, d => d.term)
+                .enter().append("g")
+                .attr("class", "word-bubble");
+
+            currentBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
+            
+            currentBubbles.append("circle")
+                .attr("r", 0)
+                .style("fill", d => d.isAntonym ? antonymColor : difficultyColors[d.difficulty] || '#cccccc')
+                .transition().duration(500).delay((d,i) => i * 20)
+                .attr("r", d => bubbleSizeScale(d.frequency));
+                
+            currentBubbles.append("text")
+                .text(d => d.term)
+                .attr("dy", "0.3em").style("opacity", 0)
+                .transition().duration(500).delay((d,i) => i * 20)
+                .style("opacity", 1);
+                
+            setupTooltipEvents(currentBubbles);
+        }
+        
+        function toggleSpectrumView(axisKey, axisData) {
+            clearComparison();
+            if (currentView === 'spectrum' && activeSpectrumAxis === axisKey) {
+                switchToRadarView();
+            } else {
+                switchToSpectrumView(axisKey, axisData);
+            }
+        }
+        
+        function switchToSpectrumView(axisKey, axisData) {
+            if (currentClineBubbles) currentClineBubbles.style("opacity", 0).attr("pointer-events", "none");
+            currentView = 'spectrum'; 
+            activeSpectrumAxis = axisKey;
+            mainTitle.text(`Spectrum: ${axisData.name}`);
+            spectrumGroup.select(".spectrum-label-left").text(axisData.labels[0].toUpperCase());
+            spectrumGroup.select(".spectrum-label-right").text(axisData.labels[1].toUpperCase());
+            
+            labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
+            radarBgGroup.selectAll(".radar-ring, .quadrant-line, .ring-label").transition().duration(300).style("opacity", 0);
+            spectrumGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
+            
+            const synonymNodes = currentBubbles.data().filter(d => !d.isAntonym);
+            
+            const spectrumSimulation = d3.forceSimulation(synonymNodes)
+                .force("x", d3.forceX(d => spectrumScale(d[axisKey])).strength(1))
+                .force("y", d3.forceY(0).strength(0.05))
+                .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 3).strength(0.8))
+                .stop();
+            for (let i = 0; i < 150; ++i) spectrumSimulation.tick();
+            
+            currentBubbles.filter(d => d.isAntonym).transition().duration(750).style("opacity", 0).attr("pointer-events", "none");
+            currentBubbles.filter(d => !d.isAntonym).transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.x}, ${d.y})`);
+        }
+
+        async function showClineForAntonym() {
+            currentView = 'cline-spectrum';
+            activeSpectrumAxis = null;
+            mainTitle.text(`Generating Cline for "${currentRadarData.hub_word}"...`);
+            scanner.classed("hidden", false);
+            
+            if (currentBubbles) currentBubbles.style("pointer-events", "none").transition().duration(300).style("opacity", 0);
+            labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
+            radarBgGroup.selectAll(".radar-ring, .quadrant-line, .ring-label").transition().duration(300).style("opacity", 0);
+            
+            const clineData = await fetchClineData(currentRadarData.hub_word, currentRadarData.part_of_speech);
             scanner.classed("hidden", true);
-            mainTitle.text(wordData.error || `No data for "${currentSearch.word}". Click to try again.`).style("cursor", "pointer");
-            restartBtn.classed("hidden", false);
+
+            if (!clineData || clineData.error) {
+                mainTitle.text(clineData.error || `Could not generate cline. Click to return.`);
+                return;
+            }
+
+            mainTitle.text(`Cline: ${clineData.spectrumLabels[0]} ↔ ${clineData.spectrumLabels[1]}`);
+            spectrumGroup.select(".spectrum-label-left").text(clineData.spectrumLabels[0].toUpperCase());
+            spectrumGroup.select(".spectrum-label-right").text(clineData.spectrumLabels[1].toUpperCase());
+            spectrumGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
+            drawClineBubbles(clineData);
         }
-    }
-
-    // --- MODIFIED --- Main drawing function
-    function processAndDrawRadar(wordData) {
-        scanner.classed("hidden", true);
-        currentRadarData = wordData;
-        mainTitle.text(`Word Radar: "${wordData.hub_word}"`).style("cursor", "pointer");
         
-        updateLegend();
-        drawRadarBackground(wordData.axes);
-        drawWordBubbles(wordData);
-        
-        legend.classed("hidden", false);
-        restartBtn.classed("hidden", false);
-        exportBtn.classed("hidden", false);
-    }
-    
-    function clearChart() {
-        clearComparison();
-        if (currentBubbles) currentBubbles.remove();
-        if (currentClineBubbles) currentClineBubbles.remove();
-        labelsGroup.selectAll(".quadrant-label, .antonym-label").remove();
-        d3.select("#legend-items-container").selectAll("*").remove(); 
-    }
-    
-    // --- MODIFIED --- Draw fixed axes and antonyms
-    function drawWordBubbles(radarData) {
-        // 1. Draw Static Axis Labels
-        const labelOffset = maxRadius + (isMobile ? 15 : 25);
-        labelsGroup.append("text").attr("class", "quadrant-label").attr("x", 0).attr("y", -labelOffset).attr("text-anchor", "middle").text("FORMALITY").on("click", e => toggleSpectrumView('formality', radarData.axes.y));
-        labelsGroup.append("text").attr("class", "quadrant-label").attr("x", labelOffset).attr("y", 0).attr("dominant-baseline", "middle").attr("text-anchor", "start").text("STYLE").on("click", e => toggleSpectrumView('style', radarData.axes.x));
-        
-        // 2. Position and draw synonym bubbles
-        const synonymNodes = radarData.synonyms.map(d => {
-            d.x = scoreToPixelScale(d.style);
-            d.y = -scoreToPixelScale(d.formality); // Y is inverted in SVG
-            d.isAntonym = false;
-            return d;
-        });
-        
-        const simulation = d3.forceSimulation(synonymNodes)
-            .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 3).strength(0.9))
-            .force("x", d3.forceX(d => d.x).strength(0.2))
-            .force("y", d3.forceY(d => d.y).strength(0.2))
-            .stop();
-        for (let i = 0; i < 150; ++i) simulation.tick();
-        
-        // Save final radar positions for transitions
-        synonymNodes.forEach(d => { d.radarX = d.x; d.radarY = d.y; });
-        
-        // 3. Position and draw antonym bubbles outside the radar
-        const antonymRadius = maxRadius * 1.08;
-        const angleStep = (Math.PI / 2) / (radarData.antonyms.length + 1);
-        const antonymNodes = radarData.antonyms.map((d, i) => {
-            const angle = (3 * Math.PI / 4) + ((i+1) * angleStep) - (Math.PI / 4); // Place in bottom-left/top-right corners
-            const corner = Math.floor(i / (radarData.antonyms.length/2)); // 0 for top-right, 1 for bottom-left
-            const signX = corner === 0 ? 1 : -1;
-            const signY = corner === 0 ? -1 : 1;
-            d.x = signX * antonymRadius * Math.cos(angleStep * (i % (radarData.antonyms.length/2) + 1));
-            d.y = signY * antonymRadius * Math.sin(angleStep * (i % (radarData.antonyms.length/2) + 1));
-            d.isAntonym = true;
-            d.frequency = 50; // Give them a medium, consistent size
-            d.difficulty = 'intermediate'; // For color and tooltip
-            d.definition = 'An opposite of the main word.';
-            d.example = `Click to see a scale from '${d.term}' to '${radarData.hub_word}'.`;
-            return d;
-        });
-        
-        const allNodes = [...synonymNodes, ...antonymNodes];
-
-        currentBubbles = bubblesGroup.selectAll(".word-bubble")
-            .data(allNodes, d => d.term)
-            .enter().append("g")
-            .attr("class", "word-bubble");
-
-        currentBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
-        
-        currentBubbles.append("circle")
-            .attr("r", 0)
-            .style("fill", d => d.isAntonym ? antonymColor : difficultyColors[d.difficulty] || '#cccccc')
-            .transition().duration(500).delay((d,i) => i * 20)
-            .attr("r", d => bubbleSizeScale(d.frequency));
+        function drawClineBubbles(clineData) {
+            if (currentClineBubbles) currentClineBubbles.remove();
+            const nodes = clineData.words.map(d => {
+                d.x = spectrumScale(d.intensity);
+                d.y = (Math.random() - 0.5) * 50; 
+                return d;
+            });
+            const simulation = d3.forceSimulation(nodes)
+                .force("x", d3.forceX(d => spectrumScale(d.intensity)).strength(1))
+                .force("y", d3.forceY(0).strength(0.1))
+                .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 3).strength(0.9)).stop();
+            for (let i = 0; i < 150; ++i) simulation.tick();
             
-        currentBubbles.append("text")
-            .text(d => d.term)
-            .attr("dy", "0.3em").style("opacity", 0)
-            .transition().duration(500).delay((d,i) => i * 20)
-            .style("opacity", 1);
-            
-        setupTooltipEvents(currentBubbles);
-    }
-    
-    // --- MODIFIED --- View switching logic
-    function toggleSpectrumView(axisKey, axisData) {
-        clearComparison();
-        if (currentView === 'spectrum' && activeSpectrumAxis === axisKey) {
-            switchToRadarView();
-        } else {
-            switchToSpectrumView(axisKey, axisData);
-        }
-    }
-    
-    function switchToSpectrumView(axisKey, axisData) {
-        if (currentClineBubbles) currentClineBubbles.style("opacity", 0).attr("pointer-events", "none");
-
-        currentView = 'spectrum'; 
-        activeSpectrumAxis = axisKey;
-        mainTitle.text(`Spectrum: ${axisData.name}`);
-        spectrumGroup.select(".spectrum-label-left").text(axisData.labels[0].toUpperCase());
-        spectrumGroup.select(".spectrum-label-right").text(axisData.labels[1].toUpperCase());
-        
-        labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
-        radarBgGroup.selectAll(".radar-ring, .quadrant-line").transition().duration(300).style("opacity", 0);
-        spectrumGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
-        
-        const allNodes = currentBubbles.data().filter(d => !d.isAntonym); // Only show synonyms on spectrum
-        
-        const spectrumSimulation = d3.forceSimulation(allNodes)
-            .force("x", d3.forceX(d => spectrumScale(d[axisKey])).strength(1))
-            .force("y", d3.forceY(0).strength(0.05))
-            .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 3).strength(0.8))
-            .stop();
-        for (let i = 0; i < 150; ++i) spectrumSimulation.tick();
-        
-        currentBubbles.filter(d => d.isAntonym).transition().duration(750).style("opacity", 0).attr("pointer-events", "none");
-        currentBubbles.filter(d => !d.isAntonym).transition().duration(750).ease(d3.easeCubicOut).style("opacity", 1).attr("pointer-events", "auto").attr("transform", d => `translate(${d.x}, ${d.y})`);
-    }
-
-    async function showClineForAntonym() {
-        currentView = 'cline-spectrum';
-        activeSpectrumAxis = null;
-        
-        mainTitle.text(`Generating Cline for "${currentRadarData.hub_word}"...`);
-        scanner.classed("hidden", false);
-        
-        if (currentBubbles) currentBubbles.style("pointer-events", "none").transition().duration(300).style("opacity", 0);
-        labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
-        radarBgGroup.selectAll(".radar-ring, .quadrant-line").transition().duration(300).style("opacity", 0);
-        
-        const clineData = await fetchClineData(currentRadarData.hub_word, currentRadarData.part_of_speech);
-        scanner.classed("hidden", true);
-
-        if (!clineData || clineData.error) {
-            mainTitle.text(clineData.error || `Could not generate cline. Click to return.`);
-            return;
+            currentClineBubbles = clineBubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term).enter().append("g").attr("class", "word-bubble");
+            currentClineBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
+            currentClineBubbles.append("circle").attr("r", 0).style("fill", d => d.intensity < 0 ? antonymColor : difficultyColors.beginner)
+                .transition().duration(500).delay((d,i) => i * 30).attr("r", d => bubbleSizeScale(d.frequency));
+            currentClineBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
+                .transition().duration(500).delay((d,i) => i * 30).style("opacity", 1);
+            setupTooltipEvents(currentClineBubbles);
         }
 
-        mainTitle.text(`Cline: ${clineData.spectrumLabels[0]} ↔ ${clineData.spectrumLabels[1]}`);
-        spectrumGroup.select(".spectrum-label-left").text(clineData.spectrumLabels[0].toUpperCase());
-        spectrumGroup.select(".spectrum-label-right").text(clineData.spectrumLabels[1].toUpperCase());
-        spectrumGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
+        function switchToRadarView() {
+            return new Promise(resolve => {
+                if (currentView === 'radar' && activeSpectrumAxis === null) { resolve(); return; }
+                clearComparison(); 
+                
+                if (currentClineBubbles) {
+                    currentClineBubbles.transition().duration(300).style("opacity", 0).attr("pointer-events", "none").end().then(() => { currentClineBubbles.remove(); currentClineBubbles = null; });
+                }
+                
+                currentView = 'radar'; activeSpectrumAxis = null;
+                if(currentRadarData) mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
+                
+                legend.style("opacity", 1);
+                spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
+                radarBgGroup.selectAll(".quadrant-line, .radar-ring, .ring-label").transition().delay(200).duration(500).style("opacity", 1);
+                labelsGroup.selectAll(".quadrant-label").classed("active", false);
+                labelsGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
+                
+                if (currentBubbles) {
+                    currentBubbles.transition().duration(750).ease(d3.easeCubicOut)
+                        .style("opacity", 1).attr("pointer-events", "auto")
+                        .attr("transform", d => `translate(${d.isAntonym ? d.x : d.radarX}, ${d.isAntonym ? d.y : d.radarY})`)
+                        .end().then(resolve);
+                } else { resolve(); }
+            });
+        }
         
-        drawClineBubbles(clineData);
-    }
-    
-    // --- UNCHANGED, BUT CALLED BY NEW LOGIC ---
-    function drawClineBubbles(clineData) {
-        if (currentClineBubbles) currentClineBubbles.remove();
-        const nodes = clineData.words.map(d => {
-            d.x = spectrumScale(d.intensity);
-            d.y = (Math.random() - 0.5) * 50; 
-            return d;
-        });
-        const simulation = d3.forceSimulation(nodes)
-            .force("x", d3.forceX(d => spectrumScale(d.intensity)).strength(1))
-            .force("y", d3.forceY(0).strength(0.1))
-            .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 3).strength(0.9)).stop();
-        for (let i = 0; i < 150; ++i) simulation.tick();
-        
-        currentClineBubbles = clineBubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term).enter().append("g").attr("class", "word-bubble");
-        currentClineBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
-        currentClineBubbles.append("circle").attr("r", 0).style("fill", d => d.intensity < 0 ? antonymColor : difficultyColors.beginner)
-            .transition().duration(500).delay((d,i) => i * 30).attr("r", d => bubbleSizeScale(d.frequency));
-        currentClineBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
-            .transition().duration(500).delay((d,i) => i * 30).style("opacity", 1);
-        setupTooltipEvents(currentClineBubbles);
-    }
+        function handleWordClick(event, d) {
+            event.stopPropagation();
+            if (d.isAntonym) { showClineForAntonym(d); return; }
 
-    // --- MODIFIED --- Switch back to radar view
-    function switchToRadarView() {
-        return new Promise(resolve => {
-            if (currentView === 'radar' && activeSpectrumAxis === null) { resolve(); return; }
-            clearComparison(); 
-            
-            if (currentClineBubbles) {
-                currentClineBubbles.transition().duration(300).style("opacity", 0).attr("pointer-events", "none").end().then(() => {
-                    currentClineBubbles.remove(); currentClineBubbles = null;
-                });
+            tooltip.style("opacity", 0);
+            const node = d3.select(event.currentTarget);
+            const isSelected = selectedWords.some(sw => sw.term === d.term);
+            if (isSelected) {
+                selectedWords = selectedWords.filter(sw => sw.term !== d.term);
+                node.classed("selected", false);
+            } else {
+                if (selectedWords.length < 2) { selectedWords.push(d); node.classed("selected", true); }
             }
             
-            currentView = 'radar'; activeSpectrumAxis = null;
-            if(currentRadarData) mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
-            
-            legend.style("opacity", 1);
-            spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
-            radarBgGroup.selectAll(".quadrant-line, .radar-ring").transition().delay(200).duration(500).style("opacity", 1);
-            labelsGroup.selectAll(".quadrant-label").classed("active", false);
-            labelsGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
-            
-            if (currentBubbles) {
-                currentBubbles.transition().duration(750).ease(d3.easeCubicOut)
-                    .style("opacity", 1).attr("pointer-events", "auto")
-                    .attr("transform", d => `translate(${d.isAntonym ? d.x : d.radarX}, ${d.isAntonym ? d.y : d.radarY})`)
-                    .end().then(resolve);
-            } else { resolve(); }
-        });
-    }
-    
-    // --- MODIFIED --- Event handler for word clicks
-    function handleWordClick(event, d) {
-        event.stopPropagation();
-        
-        // If an antonym is clicked, trigger cline generation
-        if (d.isAntonym) {
-            showClineForAntonym(d);
-            return;
-        }
-
-        tooltip.style("opacity", 0);
-        const node = d3.select(event.currentTarget.parentNode);
-        const isSelected = selectedWords.some(sw => sw.term === d.term);
-        if (isSelected) {
-            selectedWords = selectedWords.filter(sw => sw.term !== d.term);
-            node.classed("selected", false);
-        } else {
-            if (selectedWords.length < 2) {
-                selectedWords.push(d);
-                node.classed("selected", true);
+            const activeBubbles = currentView === 'cline-spectrum' ? currentClineBubbles : currentBubbles;
+            if (selectedWords.length === 2) {
+                showComparisonTooltip(selectedWords[0], selectedWords[1]);
+                activeBubbles.classed("dimmed", data => !selectedWords.some(sw => sw.term === data.term));
+            } else {
+                tooltip.classed("comparison-tooltip", false);
+                if (activeBubbles) activeBubbles.classed("dimmed", false);
             }
         }
         
-        const activeBubbles = currentView === 'cline-spectrum' ? currentClineBubbles : currentBubbles;
-        if (selectedWords.length === 2) {
-            showComparisonTooltip(selectedWords[0], selectedWords[1]);
-            activeBubbles.classed("dimmed", data => !selectedWords.some(sw => sw.term === data.term));
-        } else {
-            tooltip.classed("comparison-tooltip", false);
-            if (activeBubbles) activeBubbles.classed("dimmed", false);
+        function updateLegend() {
+            const legendItemsContainer = d3.select("#legend-items-container");
+            legendItemsContainer.selectAll("*").remove();
+            
+            const difficultyData = [
+                { label: 'Beginner', color: difficultyColors.beginner },
+                { label: 'Intermediate', color: difficultyColors.intermediate },
+                { label: 'Advanced', color: difficultyColors.advanced },
+                { label: 'Opposite', color: antonymColor }
+            ];
+
+            const legendItems = legendItemsContainer.selectAll(".legend-item")
+                .data(difficultyData).enter().append("div").attr("class", "legend-item");
+            legendItems.append("div").attr("class", "legend-circle").style("background-color", d => d.color);
+            legendItems.append("span").text(d => d.label);
         }
-    }
-    
-    // --- MODIFIED --- Update legend for difficulty
-    function updateLegend() {
-        const legendItemsContainer = d3.select("#legend-items-container");
-        legendItemsContainer.selectAll("*").remove();
-        
-        const difficultyData = [
-            { label: 'Beginner', color: difficultyColors.beginner },
-            { label: 'Intermediate', color: difficultyColors.intermediate },
-            { label: 'Advanced', color: difficultyColors.advanced },
-            { label: 'Opposite', color: antonymColor }
-        ];
 
-        const legendItems = legendItemsContainer.selectAll(".legend-item")
-            .data(difficultyData).enter().append("div").attr("class", "legend-item");
-        legendItems.append("div").attr("class", "legend-circle").style("background-color", d => d.color);
-        legendItems.append("span").text(d => d.label);
-    }
-
-    // --- All other helper functions remain the same ---
-    async function fetchClineData(word, partOfSpeech) { try { const response = await fetch('/.netlify/functions/word-radar-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ word, partOfSpeech, requestType: 'cline' }) }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || `Server Error: ${response.status}`); } return await response.json(); } catch (error) { console.error("Failed to fetch cline data:", error); return { error: error.message }; } }
-    function resetToInitialState() { if (!scanner.classed("hidden")) return; switchToRadarView().then(() => { clearChart(); mainTitle.text("Enter a word to build its Radar").style("cursor", "default"); inputContainer.classed("hidden", false); senseSelector.classed("hidden", true); legend.classed("hidden", true); restartBtn.classed("hidden", true); exportBtn.classed("hidden", true); d3.select("#word-input").property("value", "").node().focus(); d3.select("#category-input").property("value", ""); d3.select("#custom-words-input").property("value", ""); d3.selectAll('.pos-option').classed('selected', false); d3.select("#submit-btn").classed("hidden", true); }); }
-    function drawRadarBackground(axesData) { radarBgGroup.selectAll("*").remove(); const ringCount = 4; const ringWidth = maxRadius / ringCount; const ringColors = ["#2a2a4a", "#242442", "#1f1f3a", "#1a1a2e"]; radarBgGroup.selectAll(".radar-ring").data(d3.range(ringCount - 1, -1, -1)).enter().append("circle").attr("class", "radar-ring").attr("r", d => (d + 1) * ringWidth).style("fill", (d, i) => ringColors[i]); radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-v").attr("x1", 0).attr("y1", -maxRadius).attr("x2", 0).attr("y2", maxRadius); radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-h").attr("x1", -maxRadius).attr("y1", 0).attr("x2", maxRadius).attr("y2", 0); if (axesData) { const labelOffset = maxRadius + 8; labelsGroup.append("text").attr("class", "ring-label").attr("x", -labelOffset).attr("y", 5).attr("text-anchor", "end").text(axesData.x.labels[0]); labelsGroup.append("text").attr("class", "ring-label").attr("x", labelOffset).attr("y", 5).attr("text-anchor", "start").text(axesData.x.labels[1]); labelsGroup.append("text").attr("class", "ring-label").attr("x", 0).attr("y", -labelOffset + 5).attr("text-anchor", "middle").text(axesData.y.labels[1]); labelsGroup.append("text").attr("class", "ring-label").attr("x", 0).attr("y", labelOffset + 5).attr("text-anchor", "middle").text(axesData.y.labels[0]); } }
-    function drawSpectrumView() { spectrumGroup.selectAll("*").remove(); spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9); spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", 0).attr("y1", -50).attr("x2", 0).attr("y2", 50); const labelPadding = isMobile ? 12 : 25; spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-left").attr("x", -maxRadius * 0.9 - labelPadding).attr("text-anchor", "end").attr("dominant-baseline", "middle"); spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-right").attr("x", maxRadius * 0.9 + labelPadding).attr("text-anchor", "start").attr("dominant-baseline", "middle"); }
-    function setupTooltipEvents(selection) { selection.on("click", handleWordClick).on("mouseover", (event, d) => { if (selectedWords.length > 0) return; if (!d.isAntonym) speak(d.term); tooltip.transition().duration(200).style("opacity", .95); const metadataHTML = getMetadataHTML(d); tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>${metadataHTML}`); const r = tooltip.node().getBoundingClientRect(); let l = event.pageX + 15, t = event.pageY - 28; if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15; if (t + r.height > window.innerHeight) t = event.pageY - r.height - 15; if (t < 0) t = event.pageY + 15; tooltip.style("left", l + "px").style("top", t + "px"); }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } }); }
-    function clearComparison() { if (!currentBubbles && !currentClineBubbles) return; selectedWords = []; if(currentBubbles) currentBubbles.classed("selected", false).classed("dimmed", false); if(currentClineBubbles) currentClineBubbles.classed("selected", false).classed("dimmed", false); tooltip.style("opacity", 0).classed("comparison-tooltip", false); }
-    function showComparisonTooltip(d1, d2) { const content = `<div class="comparison-close" onclick="d3.select('.tooltip').style('opacity', 0); d3.selectAll('.word-bubble').classed('selected dimmed', false); window.selectedWords = [];">×</div><h3>Comparing Words</h3><div class="comparison-grid"><div class="comparison-col"><h4>${d1.term}</h4><p>${d1.definition}</p><div class="example">e.g., "${d1.example}"</div>${getMetadataHTML(d1)}</div><div class="comparison-col"><h4>${d2.term}</h4><p>${d2.definition}</p><div class="example">e.g., "${d2.example}"</div>${getMetadataHTML(d2)}</div></div><div class="metadata"><strong>Tip:</strong> Click the background to clear.</div>`; tooltip.html(content).classed("comparison-tooltip", true).style("opacity", 0).style("left", null).style("top", null); requestAnimationFrame(() => { tooltip.transition().duration(200).style("opacity", 0.95); if (!isMobile) { tooltip.style("left", `${width / 2 - tooltip.node().getBoundingClientRect().width / 2}px`).style("top", `${height / 2 - tooltip.node().getBoundingClientRect().height / 2}px`); } }); }
-    function speak(text, lang = 'en-US') { if ('speechSynthesis' in window && isSoundOn) { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; window.speechSynthesis.speak(u); } }
-    function getMetadataHTML(d) { const difficultyHTML = d.difficulty ? `<span class="difficulty ${d.difficulty.toLowerCase()}">${d.difficulty}</span>` : ''; let freqLevel = 0; if (d.frequency > 0) { freqLevel = Math.ceil((d.frequency / 100) * 4); } const frequencyHTML = `<div class="frequency-indicator freq-${freqLevel}" title="Frequency: ${d.frequency}/100"><div class="freq-bar"></div><div class="freq-bar"></div><div class="freq-bar"></div><div class="freq-bar"></div></div>`; return `<div class="metadata"><div class="metadata-item">${difficultyHTML}${frequencyHTML}</div></div>`; }
-    function setupSoundToggle() { d3.select("#sound-toggle").on("click", () => { isSoundOn = !isSoundOn; d3.select("#sound-toggle").classed("sound-off", !isSoundOn).select(".control-label").text(isSoundOn ? "Sound ON" : "Sound OFF"); if (!isSoundOn) { window.speechSynthesis.cancel(); } }); }
-    function exportAsPNG() { const exportArea = d3.select("#chart-container").node(); html2canvas(exportArea, { backgroundColor: '#1a1a2e', scale: 2, logging: false, useCORS: true }).then(canvas => { const ctx = canvas.getContext('2d'); const text = "Word Radar by ELTcation - www.eltcation.com"; const padding = 25; ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = 'rgba(224, 224, 224, 0.6)'; ctx.textAlign = 'center'; ctx.fillText(text, canvas.width / 2, canvas.height - padding); const pngUrl = canvas.toDataURL("image/png"); const link = document.createElement("a"); const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`; link.download = fileName; link.href = pngUrl; document.body.appendChild(link); link.click(); document.body.removeChild(link); }).catch(err => { console.error("html2canvas failed:", err); alert("Sorry, there was an error exporting the image."); }); }
-    async function fetchWordData(word, partOfSpeech, category, synonyms = null) { try { const requestBody = { word, partOfSpeech, category }; if (synonyms) { requestBody.synonyms = synonyms; } const response = await fetch('/.netlify/functions/word-radar-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || `Server Error: ${response.status}`); } return await response.json(); } catch (error) { console.error("Failed to fetch word data:", error); return { error: error.message }; } }
-});
-</script>
+        async function fetchClineData(word, partOfSpeech) { try { const response = await fetch('/.netlify/functions/word-radar-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ word, partOfSpeech, requestType: 'cline' }) }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || `Server Error: ${response.status}`); } return await response.json(); } catch (error) { console.error("Failed to fetch cline data:", error); return { error: error.message }; } }
+        function resetToInitialState() { if (!scanner.classed("hidden")) return; switchToRadarView().then(() => { clearChart(); mainTitle.text("Enter a word to build its Radar").style("cursor", "default"); inputContainer.classed("hidden", false); senseSelector.classed("hidden", true); legend.classed("hidden", true); restartBtn.classed("hidden", true); exportBtn.classed("hidden", true); d3.select("#word-input").property("value", "").node().focus(); d3.select("#category-input").property("value", ""); d3.select("#custom-words-input").property("value", ""); d3.selectAll('.pos-option').classed('selected', false); d3.select("#submit-btn").classed("hidden", true); }); }
+        function drawRadarBackground(axesData) { 
+            radarBgGroup.selectAll("*").remove(); 
+            radarBgGroup.append("circle").attr("class", "radar-ring").attr("r", maxRadius).style("stroke", "#4f4f7a");
+            radarBgGroup.append("circle").attr("class", "radar-ring").attr("r", maxRadius * 0.66).style("stroke", "#4f4f7a");
+            radarBgGroup.append("circle").attr("class", "radar-ring").attr("r", maxRadius * 0.33).style("stroke", "#4f4f7a");
+            
+            radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-v").attr("x1", 0).attr("y1", -maxRadius).attr("x2", 0).attr("y2", maxRadius);
+            radarBgGroup.append("line").attr("class", "quadrant-line").attr("id", "radar-line-h").attr("x1", -maxRadius).attr("y1", 0).attr("x2", maxRadius).attr("y2", 0); 
+            
+            if (axesData) { 
+                const labelOffset = maxRadius + 8; 
+                labelsGroup.append("text").attr("class", "ring-label").attr("x", -labelOffset).attr("y", 5).attr("text-anchor", "end").text(axesData.x.labels[0]); 
+                labelsGroup.append("text").attr("class", "ring-label").attr("x", labelOffset).attr("y", 5).attr("text-anchor", "start").text(axesData.x.labels[1]); 
+                labelsGroup.append("text").attr("class", "ring-label").attr("x", 0).attr("y", -labelOffset + 5).attr("text-anchor", "middle").text(axesData.y.labels[1]); 
+                labelsGroup.append("text").attr("class", "ring-label").attr("x", 0).attr("y", labelOffset + 5).attr("text-anchor", "middle").text(axesData.y.labels[0]); 
+            } 
+        }
+        function drawSpectrumView() { spectrumGroup.selectAll("*").remove(); spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", -maxRadius * 0.9).attr("x2", maxRadius * 0.9); spectrumGroup.append("line").attr("class", "spectrum-axis").attr("x1", 0).attr("y1", -50).attr("x2", 0).attr("y2", 50); const labelPadding = isMobile ? 12 : 25; spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-left").attr("x", -maxRadius * 0.9 - labelPadding).attr("text-anchor", "end").attr("dominant-baseline", "middle"); spectrumGroup.append("text").attr("class", "spectrum-label spectrum-label-right").attr("x", maxRadius * 0.9 + labelPadding).attr("text-anchor", "start").attr("dominant-baseline", "middle"); }
+        function setupTooltipEvents(selection) { selection.on("click", handleWordClick).on("mouseover", (event, d) => { if (selectedWords.length > 0) return; if (!d.isAntonym) speak(d.term); tooltip.transition().duration(200).style("opacity", .95); const metadataHTML = getMetadataHTML(d); tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>${metadataHTML}`); const r = tooltip.node().getBoundingClientRect(); let l = event.pageX + 15, t = event.pageY - 28; if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15; if (t + r.height > window.innerHeight) t = event.pageY - r.height - 15; if (t < 0) t = event.pageY + 15; tooltip.style("left", l + "px").style("top", t + "px"); }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } }); }
+        function clearComparison() { if (!currentBubbles && !currentClineBubbles) return; selectedWords = []; if(currentBubbles) currentBubbles.classed("selected", false).classed("dimmed", false); if(currentClineBubbles) currentClineBubbles.classed("selected", false).classed("dimmed", false); tooltip.style("opacity", 0).classed("comparison-tooltip", false); }
+        function showComparisonTooltip(d1, d2) { const content = `<div class="comparison-close" onclick="d3.select('.tooltip').style('opacity', 0); d3.selectAll('.word-bubble').classed('selected dimmed', false); selectedWords = [];">×</div><h3>Comparing Words</h3><div class="comparison-grid"><div class="comparison-col"><h4>${d1.term}</h4><p>${d1.definition}</p><div class="example">e.g., "${d1.example}"</div>${getMetadataHTML(d1)}</div><div class="comparison-col"><h4>${d2.term}</h4><p>${d2.definition}</p><div class="example">e.g., "${d2.example}"</div>${getMetadataHTML(d2)}</div></div><div class="metadata"><strong>Tip:</strong> Click the background to clear.</div>`; tooltip.html(content).classed("comparison-tooltip", true).style("opacity", 0).style("left", null).style("top", null); requestAnimationFrame(() => { tooltip.transition().duration(200).style("opacity", 0.95); if (!isMobile) { tooltip.style("left", `${width / 2 - tooltip.node().getBoundingClientRect().width / 2}px`).style("top", `${height / 2 - tooltip.node().getBoundingClientRect().height / 2}px`); } }); }
+        function speak(text, lang = 'en-US') { if ('speechSynthesis' in window && isSoundOn) { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; window.speechSynthesis.speak(u); } }
+        function getMetadataHTML(d) { const difficultyHTML = d.difficulty ? `<span class="difficulty ${d.difficulty.toLowerCase()}">${d.difficulty}</span>` : ''; let freqLevel = 0; if (d.frequency > 0) { freqLevel = Math.ceil((d.frequency / 100) * 4); } const frequencyHTML = `<div class="frequency-indicator freq-${freqLevel}" title="Frequency: ${d.frequency}/100"><div class="freq-bar"></div><div class="freq-bar"></div><div class="freq-bar"></div><div class="freq-bar"></div></div>`; return `<div class="metadata"><div class="metadata-item">${difficultyHTML}${frequencyHTML}</div></div>`; }
+        function setupSoundToggle() { d3.select("#sound-toggle").on("click", () => { isSoundOn = !isSoundOn; d3.select("#sound-toggle").classed("sound-off", !isSoundOn).select(".control-label").text(isSoundOn ? "Sound ON" : "Sound OFF"); if (!isSoundOn) { window.speechSynthesis.cancel(); } }); }
+        function exportAsPNG() { const exportArea = d3.select("#chart-container").node(); html2canvas(exportArea, { backgroundColor: '#1a1a2e', scale: 2, logging: false, useCORS: true }).then(canvas => { const ctx = canvas.getContext('2d'); const text = "Word Radar by ELTcation - www.eltcation.com"; const padding = 25; ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = 'rgba(224, 224, 224, 0.6)'; ctx.textAlign = 'center'; ctx.fillText(text, canvas.width / 2, canvas.height - padding); const pngUrl = canvas.toDataURL("image/png"); const link = document.createElement("a"); const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`; link.download = fileName; link.href = pngUrl; document.body.appendChild(link); link.click(); document.body.removeChild(link); }).catch(err => { console.error("html2canvas failed:", err); alert("Sorry, there was an error exporting the image."); }); }
+        async function fetchWordData(word, partOfSpeech, category, synonyms = null) { try { const requestBody = { word, partOfSpeech, category }; if (synonyms) { requestBody.synonyms = synonyms; } const response = await fetch('/.netlify/functions/word-radar-data', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }); if (!response.ok) { const errorData = await response.json(); throw new Error(errorData.error || `Server Error: ${response.status}`); } return await response.json(); } catch (error) { console.error("Failed to fetch word data:", error); return { error: error.message }; } }
+    });
+    </script>
+</body>
+</html>
