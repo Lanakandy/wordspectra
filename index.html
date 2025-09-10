@@ -319,22 +319,6 @@
                 gap: 15px;
             }
         }
-        .quadrant-highlight {
-            fill: #9a9ac8;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
-        .legend-quadrant-item {
-            padding: 4px 6px;
-            margin: 4px 0;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .legend-quadrant-item:hover {
-            background-color: rgba(255,255,255,0.1);
-        }
         .metadata-item {
             display: flex;
             align-items: center;
@@ -414,7 +398,6 @@
                 <div class="pos-option" data-pos="noun">Noun</div>
                 <div class="pos-option" data-pos="adjective">Adjective</div>
             </div>
-            <input type="text" id="category-input" placeholder="Optional context (e.g., emotions)">
             <textarea id="custom-words-input" placeholder="Custom Words: Paste comma-separated words to classify instead of using the thesaurus."></textarea>
             <button id="submit-btn" class="hidden">Start</button>
         </div>
@@ -425,14 +408,13 @@
         <div id="radar-scanner" class="hidden"></div>
         <div id="legend" class="hidden">
             <h4>Legend</h4>
-            <div id="legend-quadrants"></div>
-            <div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid #555;">
+            <div style="margin-bottom: 10px;">
                 <strong>Bubble Color:</strong>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #4CAF50;"></div>Beginner</div>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #FF9800;"></div>Intermediate</div>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #F44336;"></div>Advanced</div>
             </div>
-            <div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid #555;">
+            <div style="padding-top: 6px; border-top: 1px solid #555;">
                 <strong>Bubble Size:</strong>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 8px; height: 8px; background-color: #666;"></div>Rare</div>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 16px; height: 16px; background-color: #666;"></div>Common</div>
@@ -494,7 +476,7 @@
         const labelsGroup = chartGroup.append("g").attr("class", "labels-container");
         
         const submitBtn = d3.select("#submit-btn");
-        let currentSearch = { word: '', partOfSpeech: '', category: '' };
+        let currentSearch = { word: '', partOfSpeech: '' };
         
         function updateSubmitButtonState() {
             const word = d3.select("#word-input").property("value").trim();
@@ -511,7 +493,6 @@
             
             currentSearch.word = d3.select("#word-input").property("value").trim();
             const selectedPosNode = d3.select(".pos-option.selected").node();
-            currentSearch.category = d3.select("#category-input").property("value").trim();
             const customWords = d3.select("#custom-words-input").property("value").trim();
 
             if (!currentSearch.word) { alert("Please enter a word."); return; }
@@ -535,7 +516,7 @@
             
             mainTitle.style("cursor", "default").text(`Discovering meanings for "${currentSearch.word}"...`);
             scanner.classed("hidden", false);
-            const discoveryData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category);
+            const discoveryData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech);
             
             if (discoveryData && discoveryData.senses) {
                 scanner.classed("hidden", true);
@@ -617,7 +598,7 @@
             mainTitle.style("cursor", "default").text(`Generating Radar for "${currentSearch.word}"...`);
             scanner.classed("hidden", false);
 
-            const wordData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, currentSearch.category, synonyms);
+            const wordData = await fetchWordData(currentSearch.word, currentSearch.partOfSpeech, synonyms);
             currentRadarData = wordData;
             scanner.classed("hidden", true);
 
@@ -650,29 +631,6 @@
                 </div>
             `;
             return `<div class="metadata"><div class="metadata-item">${difficultyHTML}${frequencyHTML}</div></div>`;
-        }
-
-        function drawQuadrantHighlights() {
-            const quadrantGroup = radarBgGroup.insert("g", ".radar-ring").attr("class", "quadrant-highlights");
-
-            const arcGenerator = d3.arc()
-                .innerRadius(0)
-                .outerRadius(maxRadius);
-
-            const quadrantData = [
-                { id: 0, startAngle: -Math.PI / 2, endAngle: 0 },
-                { id: 1, startAngle: 0, endAngle: Math.PI / 2 },
-                { id: 2, startAngle: Math.PI / 2, endAngle: Math.PI },
-                { id: 3, startAngle: Math.PI, endAngle: 3 * Math.PI / 2 }
-            ];
-
-            quadrantGroup.selectAll("path")
-                .data(quadrantData)
-                .enter()
-                .append("path")
-                .attr("class", "quadrant-highlight")
-                .attr("id", d => `quadrant-highlight-${d.id}`)
-                .attr("d", arcGenerator);
         }
 
         function handleWordClick(event, d) {
@@ -771,9 +729,9 @@
             });
         }
 
-        async function fetchWordData(word, partOfSpeech, category, synonyms = null) {
+        async function fetchWordData(word, partOfSpeech, synonyms = null) {
             try {
-                const requestBody = { word, partOfSpeech, category };
+                const requestBody = { word, partOfSpeech }; // Category is removed
                 if (synonyms) { requestBody.synonyms = synonyms; }
                 const response = await fetch('/.netlify/functions/word-radar-data', {
                     method: 'POST',
@@ -815,7 +773,6 @@
             if (!scanner.classed("hidden")) return;
             switchToRadarView().then(() => {
                 clearChart();
-                drawQuadrantHighlights();
                 mainTitle.text("Enter a word to build its Radar").style("cursor", "default");
                 inputContainer.classed("hidden", false);
                 senseSelector.classed("hidden", true);
@@ -823,7 +780,6 @@
                 restartBtn.classed("hidden", true);
                 exportBtn.classed("hidden", true);
                 d3.select("#word-input").property("value", "").node().focus();
-                d3.select("#category-input").property("value", "");
                 d3.select("#custom-words-input").property("value", "");
                 d3.selectAll('.pos-option').classed('selected', false);
                 d3.select("#submit-btn").classed("hidden", true);
@@ -878,12 +834,28 @@
                 return d;
             });
 
+            function boundingForce() {
+                for (let node of nodes) {
+                    const r = bubbleSizeScale(node.frequency);
+                    const distance = Math.sqrt(node.x * node.x + node.y * node.y);
+                    if (distance > maxRadius - r) {
+                        // If outside the boundary, move it back to the edge
+                        const angle = Math.atan2(node.y, node.x);
+                        node.x = (maxRadius - r) * Math.cos(angle);
+                        node.y = (maxRadius - r) * Math.sin(angle);
+                    }
+                }
+            }
+
             const simulation = d3.forceSimulation(nodes)
+                .force("bound", boundingForce) // <-- Add the custom bounding force
                 .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 4).strength(1))
                 .force("x", d3.forceX(d => d.radarX).strength(0.1))
                 .force("y", d3.forceY(d => d.radarY).strength(0.1))
                 .stop();
-            for (let i = 0; i < 200; ++i) simulation.tick();
+            
+            // Increase ticks to give forces more time to resolve
+            for (let i = 0; i < 300; ++i) simulation.tick();
             
             currentBubbles = bubblesGroup.selectAll(".word-bubble")
                 .data(nodes, d => d.term)
@@ -1005,31 +977,7 @@
         
         function updateLegend(data) {
             legend.classed("hidden", !data);
-            if (!data) return;
-
-            const quadrantContainer = d3.select("#legend-quadrants");
-            quadrantContainer.html(""); 
-
-            const quadrantInfo = [
-                { id: 0, text: "Formal & Figurative" },
-                { id: 3, text: "Formal & Literal" },
-                { id: 1, text: "Informal & Figurative" },
-                { id: 2, text: "Informal & Literal" }
-            ];
-
-            quadrantContainer.selectAll(".legend-quadrant-item")
-                .data(quadrantInfo)
-                .enter()
-                .append("div")
-                .attr("class", "legend-quadrant-item")
-                .text(d => d.text)
-                .on("mouseover", (e, d) => {
-                    d3.select(`#quadrant-highlight-${d.id}`).style("opacity", 0.15);
-                })
-                .on("mouseout", (e, d) => {
-                    d3.select(`#quadrant-highlight-${d.id}`).style("opacity", 0);
-                });
-        }
+            }
     });
     </script>
 </body>
