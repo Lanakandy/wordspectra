@@ -15,51 +15,57 @@ function generateCacheKey(object, prompt) {
     return createHash('sha256').update(str).digest('hex');
 }
 
-// PROMPT FOR STANDARD SYNONYM RADAR (MODIFIED)
-function getLLMPrompt(word, partOfSpeech, category, synonyms) {
-    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
+// --- MODIFIED --- NEW PROMPT FOR FIXED-AXIS RADAR
+function getFixedAxisRadarPrompt(word, partOfSpeech, synonyms) {
+    const systemPrompt = `You are a linguist creating a dataset for a Word Radar visualization for language learners. The radar has two fixed axes: Style and Formality.
 
 REQUIREMENTS:
-1.  **FILTER FIRST:** From the provided "Synonyms" list, you MUST select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**. Discard any that do not fit this grammatical role.
-2.  Create **2-3 semantic facets** (axes) for the hub word. DO NOT create a gradable opposites/antonym scale (a cline), as that is handled separately.
-3.  If a Focus Category is provided, one facet MUST relate to it.
-4.  For each word from your **filtered, grammatically-correct list**, generate: facet index (starting from 0 for your facets), ring (0-3), frequency (0-100), a brief definition, a natural usage example, a difficulty rating ('beginner', 'intermediate', or 'advanced'), and intensity scores for all facets.
-5.  Ensure the classified words are distributed logically across ALL your facets. Do not assign all words to just one facet.
+1.  **FILTER SYNONYMS:** From the provided list, select ONLY the words/phrases that are true synonyms and function as a **${partOfSpeech}**.
+2.  **GENERATE SYNONYM DATA:** For each filtered synonym, provide:
+    *   **term**: The synonym.
+    *   **style**: A score from -1.0 to 1.0. (-1.0 is very informal/slang, 0 is neutral, 1.0 is very formal/literary/poetic).
+    *   **formality**: A score from -1.0 to 1.0. (-1.0 is typically spoken, 0 is neutral, 1.0 is typically written/academic).
+    *   **definition**: A brief, clear definition.
+    *   **example**: A natural sentence using the word.
+    *   **difficulty**: 'beginner', 'intermediate', or 'advanced'.
+    *   **frequency**: An estimated usage frequency from 0 to 100.
+3.  **GENERATE ANTONYMS:** Provide a list of 2-4 key gradable antonyms for the hub word that are also a **${partOfSpeech}**.
+4.  Ensure the hub word itself is included in the synonym list with neutral scores if it's the baseline.
 
 JSON Structure:
 {
-  "hub_word": "original word",
-  "part_of_speech": "provided part of speech", 
-  "facets": [
-    {"name": "Semantic Dimension", "key": "dimension_key", "spectrumLabels": ["Low End", "High End"]}
-  ],
-  "rings": ["Core", "Common", "Specific", "Nuanced"],
-  "words": [
+  "hub_word": "${word}",
+  "part_of_speech": "${partOfSpeech}",
+  "axes": {
+    "x": {"name": "Style", "labels": ["Slang / Informal", "Literary / Formal"]},
+    "y": {"name": "Formality", "labels": ["Spoken", "Written"]}
+  },
+  "synonyms": [
     {
-      "term": "synonym_from_filtered_list",
-      "facet": 0,
-      "ring": 1,
-      "frequency": 65,
-      "definition": "Brief, clear definition for this specific synonym.",
-      "example": "Natural usage example for the synonym.",
+      "term": "synonym_from_list",
+      "style": -0.8,
+      "formality": -0.6,
+      "definition": "...",
+      "example": "...",
       "difficulty": "intermediate",
-      "intensities": {"dimension_key": 0.5, "other_key": -0.3}
+      "frequency": 65
     }
+  ],
+  "antonyms": [
+    {"term": "opposite_word_1"},
+    {"term": "opposite_word_2"}
   ]
 }
 
 Return ONLY valid JSON.`;
 
-    let userPrompt = `Hub Word: "${word}"\nPart of Speech: "${partOfSpeech}"\n\nSynonyms to filter and classify:\n[${synonyms.map(s => `"${s}"`).join(', ')}]`;
-    
-    if (category) {
-        userPrompt += `\n\nFocus Category: "${category}"`;
-    }
+    const userPrompt = `Hub Word: "${word}"\nPart of Speech: "${partOfSpeech}"\n\nSynonyms to filter and classify:\n[${synonyms.map(s => `"${s}"`).join(', ')}]`;
     
     return { systemPrompt, userPrompt };
 }
 
-// NEW PROMPT FOR CLINE GENERATION
+
+// --- UNCHANGED --- PROMPT FOR CLINE GENERATION
 function getLLMClinePrompt(word, partOfSpeech) {
     const systemPrompt = `You are a linguist creating a dataset for a "Cline" visualization, which is a scale of gradable words from one extreme to its opposite.
 
@@ -76,7 +82,7 @@ REQUIREMENTS:
     *   **example**: A natural sentence using the word.
     *   **difficulty**: 'beginner', 'intermediate', or 'advanced'.
     *   **frequency**: An estimated usage frequency from 0 to 100.
-4.  Identify the two extremes of your generated scale and provide them as `spectrumLabels`.
+4.  Identify the two extremes of your generated scale and provide them as \`spectrumLabels\`.
 
 JSON Structure:
 {
@@ -118,11 +124,15 @@ Return ONLY valid JSON.`;
     return { systemPrompt, userPrompt };
 }
 
+// --- UNCHANGED --- All other helper functions remain the same.
 async function getCachedResponse(requestBody, promptFunction, store) {
-    const { systemPrompt, userPrompt } = promptFunction(requestBody.word, requestBody.partOfSpeech, requestBody.category, requestBody.synonyms);
-    // Add requestType to cache key to differentiate between 'radar' and 'cline' requests for the same word
+    const { systemPrompt, userPrompt } = promptFunction(requestBody.word, requestBody.partOfSpeech, requestBody.synonyms);
     const cacheKeyObject = { ...requestBody };
-    delete cacheKeyObject.synonyms; // Don't include synonyms list in key for cline
+    delete cacheKeyObject.synonyms;
+    // Add requestType to cache key to differentiate
+    if (requestBody.requestType) {
+        cacheKeyObject.requestType = requestBody.requestType;
+    }
     const cacheKey = generateCacheKey(cacheKeyObject, systemPrompt);
     
     try {
@@ -148,8 +158,6 @@ async function getCachedResponse(requestBody, promptFunction, store) {
     return apiResponse;
 }
 
-// --- All other helper functions like processSensesWithClustering, callOpenRouterWithFallback, etc., remain unchanged ---
-
 // [Keep the existing processSensesWithClustering and callOpenRouterWithFallback functions here]
 function cleanDefinition(definition) {
     return definition
@@ -160,78 +168,38 @@ function cleanDefinition(definition) {
         .trim()
         .toLowerCase();
 }
-
 function calculateSimilarity(str1, str2) {
-    // Jaccard similarity based on word tokens
     const words1 = new Set(str1.split(/\s+/));
     const words2 = new Set(str2.split(/\s+/));
     const intersection = new Set([...words1].filter(x => words2.has(x)));
     const union = new Set([...words1, ...words2]);
     return union.size === 0 ? 0 : intersection.size / union.size;
 }
-
-function processSensesWithClustering(
-    allRawSenses, 
-    primarySenseCount = 3, 
-    maxTotalSenses = 8, 
-    similarityThreshold = 0.5
-) {
-    // 1. Pre-process and pre-sort by synonym count to establish cluster seeds
-    const processedSenses = allRawSenses
-        .map(sense => ({
-            ...sense,
-            cleanDef: cleanDefinition(sense.definition),
-            synonymCount: sense.synonyms.length
-        }))
-        .sort((a, b) => b.synonymCount - a.synonymCount);
-
-    // 2. Greedily cluster similar senses
+function processSensesWithClustering( allRawSenses, primarySenseCount = 3, maxTotalSenses = 8, similarityThreshold = 0.5) {
+    const processedSenses = allRawSenses.map(sense => ({...sense, cleanDef: cleanDefinition(sense.definition), synonymCount: sense.synonyms.length })).sort((a, b) => b.synonymCount - a.synonymCount);
     const clusters = [];
     for (const sense of processedSenses) {
         if (sense.synonymCount === 0) continue;
-
         let foundCluster = false;
         for (const cluster of clusters) {
             if (calculateSimilarity(sense.cleanDef, cluster.cleanDef) > similarityThreshold) {
-                // Merge into the existing cluster
                 const combinedSynonyms = new Set([...cluster.synonyms, ...sense.synonyms]);
                 cluster.synonyms = Array.from(combinedSynonyms);
                 cluster.synonymCount = cluster.synonyms.length;
-
-                // Keep the longer, likely more descriptive, definition as the representative
-                if (sense.definition.length > cluster.definition.length) {
-                    cluster.definition = sense.definition;
-                    cluster.cleanDef = sense.cleanDef;
-                }
+                if (sense.definition.length > cluster.definition.length) { cluster.definition = sense.definition; cluster.cleanDef = sense.cleanDef; }
                 foundCluster = true;
                 break;
             }
         }
-
-        if (!foundCluster) {
-            // No similar cluster found, create a new one
-            clusters.push({ ...sense });
-        }
+        if (!foundCluster) { clusters.push({ ...sense }); }
     }
-
-    // 3. Sort final clusters by their aggregated synonym count
     const finalSenses = clusters.sort((a, b) => b.synonymCount - a.synonymCount);
-
-    // 4. Split into primary and additional for progressive disclosure
     if (finalSenses.length === 0) return { senses: [], hasMore: false };
     if (finalSenses.length <= primarySenseCount) return { senses: finalSenses, hasMore: false };
-
     const primarySenses = finalSenses.slice(0, primarySenseCount);
     const additionalSenses = finalSenses.slice(primarySenseCount, maxTotalSenses);
-
-    return {
-        senses: primarySenses,
-        additionalSenses: additionalSenses.length > 0 ? additionalSenses : null,
-        hasMore: additionalSenses.length > 0
-    };
+    return { senses: primarySenses, additionalSenses: additionalSenses.length > 0 ? additionalSenses : null, hasMore: additionalSenses.length > 0 };
 }
-
-
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
     if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.');
@@ -239,11 +207,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     for (const model of modelsToTry) {
         console.log(`Attempting API call with model: ${model}`);
         try {
-            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] })
-            });
+            const response = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] }) });
             if (!response.ok) { const errorBody = await response.text(); console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`); continue; }
             const data = await response.json();
             if (data.choices && data.choices[0] && data.choices[0].message?.content) {
@@ -254,6 +218,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     }
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
+
 exports.handler = async (event, context) => {
     const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
     if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
@@ -268,7 +233,7 @@ exports.handler = async (event, context) => {
         let store;
         try { store = getStore("word-radar-cache"); } catch (storeError) { console.warn('Failed to initialize blob store:', storeError.message); store = null; }
 
-        // --- ROUTE TO CLINE GENERATION ---
+        // --- ROUTE TO CLINE GENERATION (UNCHANGED) ---
         if (requestType === 'cline') {
             console.log(`Received cline request for "${word}".`);
             const promptFunction = getLLMClinePrompt;
@@ -281,14 +246,15 @@ exports.handler = async (event, context) => {
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
-        // --- EXISTING RADAR/SYNONYM FLOW ---
+        // --- MODIFIED RADAR/SYNONYM FLOW ---
         if (synonyms && synonyms.length > 0) {
-            const apiResponse = await getCachedResponse({ word, partOfSpeech, category, synonyms }, getLLMPrompt, store);
+            // Use the new fixed-axis prompt function
+            const apiResponse = await getCachedResponse({ word, partOfSpeech, synonyms }, getFixedAxisRadarPrompt, store);
             apiResponse.hub_word = word; apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
-        // --- [The rest of the thesaurus lookup and sense processing logic remains exactly the same] ---
+        // --- Thesaurus lookup and sense processing logic remains exactly the same ---
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
         if (!MW_API_KEY) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Merriam-Webster API key is not configured.' }) };
 
@@ -323,7 +289,8 @@ exports.handler = async (event, context) => {
 
         if (processedSenses.senses.length === 1 && !processedSenses.hasMore) {
             console.log(`Single sense found for "${word}", proceeding directly to generation.`);
-            const apiResponse = await getCachedResponse({ word, partOfSpeech, category, synonyms: processedSenses.senses[0].synonyms }, getLLMPrompt, store);
+            // Use the new fixed-axis prompt function here as well
+            const apiResponse = await getCachedResponse({ word, partOfSpeech, synonyms: processedSenses.senses[0].synonyms }, getFixedAxisRadarPrompt, store);
             apiResponse.hub_word = word; 
             apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
