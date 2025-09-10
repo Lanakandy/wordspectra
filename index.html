@@ -151,20 +151,20 @@
             margin-right: -10px;
         }
 
-#sense-options::-webkit-scrollbar {
-  width: 8px;
-}
-#sense-options::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-}
-#sense-options::-webkit-scrollbar-thumb {
-  background-color: #7a7a9f;
-  border-radius: 4px;
-}
-#sense-options::-webkit-scrollbar-thumb:hover {
-  background-color: #9a9ac8;
-}
+        #sense-options::-webkit-scrollbar {
+        width: 8px;
+        }
+        #sense-options::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        }
+        #sense-options::-webkit-scrollbar-thumb {
+        background-color: #7a7a9f;
+        border-radius: 4px;
+        }
+        #sense-options::-webkit-scrollbar-thumb:hover {
+        background-color: #9a9ac8;
+        }
         .sense-option-btn {
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid #7a7a9f;
@@ -182,41 +182,41 @@
             color: #1a1a2e;
         }
 
-#show-more-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px dashed #7a7a9f;
-    border-radius: 8px;
-    padding: 10px 16px;
-    color: #9a9ac8;
-    font-size: clamp(12px, 3vw, 14px);
-    cursor: pointer;
-    text-align: center;
-    transition: all 0.2s ease;
-    margin-top: 5px;
-    font-style: italic;
-}
+        #show-more-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px dashed #7a7a9f;
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: #9a9ac8;
+            font-size: clamp(12px, 3vw, 14px);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+            margin-top: 5px;
+            font-style: italic;
+        }
 
-#show-more-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: #FF6B47;
-    color: #FF6B47;
-}
+        #show-more-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #FF6B47;
+            color: #FF6B47;
+        }
 
-.additional-senses {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease-out;
-}
+        .additional-senses {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
 
-.additional-senses.expanded {
-    max-height: 400px; /* Adjust based on your needs */
-}
+        .additional-senses.expanded {
+            max-height: 400px; /* Adjust based on your needs */
+        }
 
-.sense-divider {
-    height: 1px;
-    background: linear-gradient(to right, transparent, #7a7a9f, transparent);
-    margin: 15px 0 10px 0;
-}
+        .sense-divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #7a7a9f, transparent);
+            margin: 15px 0 10px 0;
+        }
         @media (max-width: 768px) { 
             #word-input { font-size: 16px; padding: 12px 16px; width: min(80vw, 300px); } 
             #input-container { gap: 12px; }
@@ -239,17 +239,17 @@
         }
         .control-btn {
             background: rgba(40, 40, 60, 0.9);
-    border: 1px solid #9a9ac8;
-    border-radius: 8px;
-    padding: 6px 10px;
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    backdrop-filter: blur(5px);
-    transition: all 0.2s;
-    min-width: 130px; /* Add this to set a consistent minimum width */
-    justify-content: center; /* Add this to center the icon and text */
-}
+            border: 1px solid #9a9ac8;
+            border-radius: 8px;
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: all 0.2s;
+            min-width: 130px; /* Add this to set a consistent minimum width */
+            justify-content: center; /* Add this to center the icon and text */
+        }
         .control-btn:hover { background: rgba(60, 60, 80, 0.9); }
         .control-btn .control-icon {
             width: clamp(16px, 4vw, 20px);
@@ -319,39 +319,55 @@
                 gap: 15px;
             }
         }
-.metadata-item {
-    display: flex;
-    align-items: center;
-    gap: 8px; /* Spacing between difficulty and frequency */
-}
+        .quadrant-highlight {
+            fill: #9a9ac8;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .legend-quadrant-item {
+            padding: 4px 6px;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .legend-quadrant-item:hover {
+            background-color: rgba(255,255,255,0.1);
+        }
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 8px; /* Spacing between difficulty and frequency */
+        }
 
-.frequency-indicator {
-    display: flex;
-    align-items: flex-end;
-    gap: 2px;
-    height: 12px; /* Set a fixed height */
-}
+        .frequency-indicator {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 12px; /* Set a fixed height */
+        }
 
-.freq-bar {
-    width: 4px;
-    background-color: #555; /* Inactive bar color */
-    border-radius: 1px;
-    transition: all 0.2s;
-}
+        .freq-bar {
+            width: 4px;
+            background-color: #555; /* Inactive bar color */
+            border-radius: 1px;
+            transition: all 0.2s;
+        }
 
-/* Heights for the different bars */
-.freq-bar:nth-child(1) { height: 40%; }
-.freq-bar:nth-child(2) { height: 60%; }
-.freq-bar:nth-child(3) { height: 80%; }
-.freq-bar:nth-child(4) { height: 100%; }
+        /* Heights for the different bars */
+        .freq-bar:nth-child(1) { height: 40%; }
+        .freq-bar:nth-child(2) { height: 60%; }
+        .freq-bar:nth-child(3) { height: 80%; }
+        .freq-bar:nth-child(4) { height: 100%; }
 
-/* Active colors based on frequency level */
-.freq-1 .freq-bar:nth-child(-n+1),
-.freq-2 .freq-bar:nth-child(-n+2),
-.freq-3 .freq-bar:nth-child(-n+3),
-.freq-4 .freq-bar:nth-child(-n+4) {
-    background-color: #9a9ac8; /* Active bar color */
-}
+        /* Active colors based on frequency level */
+        .freq-1 .freq-bar:nth-child(-n+1),
+        .freq-2 .freq-bar:nth-child(-n+2),
+        .freq-3 .freq-bar:nth-child(-n+3),
+        .freq-4 .freq-bar:nth-child(-n+4) {
+            background-color: #9a9ac8; /* Active bar color */
+        }
         
         #legend { position: absolute; bottom: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); background: rgba(40, 40, 60, 0.9); border: 1px solid #9a9ac8; border-radius: 8px; padding: clamp(10px, 2vw, 15px); font-size: clamp(10px, 2.5vw, 12px); color: #e0e0e0; max-width: clamp(150px, 35vw, 200px); backdrop-filter: blur(5px); transition: opacity 0.5s ease-in-out; }
         #legend h4 { margin: 0 0 8px 0; color: #ffffff; font-size: clamp(12px, 3vw, 14px); }
@@ -403,18 +419,27 @@
             <button id="submit-btn" class="hidden">Start</button>
         </div>
         <div id="sense-selector" class="hidden">
-        <h3 id="sense-title">Which meaning of "word"?</h3>
-        <div id="sense-options"></div>
+            <h3 id="sense-title">Which meaning of "word"?</h3>
+            <div id="sense-options"></div>
         </div>
         <div id="radar-scanner" class="hidden"></div>
         <div id="legend" class="hidden">
             <h4>Legend</h4>
-            <div><strong>Y-Axis:</strong> Formality</div>
-            <div><strong>X-Axis:</strong> Style (Literal vs. Figurative)</div>
-            <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #555;"><div style="margin-bottom: 5px;"><strong>Bubble Size:</strong></div><div class="legend-size-demo"><div class="size-circle" style="width: 8px; height: 8px; background-color: #666;"></div><span style="font-size: 10px;">Rare</span></div><div class="legend-size-demo"><div class="size-circle" style="width: 16px; height: 16px; background-color: #666;"></div><span style="font-size: 10px;">Common</span></div><div class="legend-size-demo"><div class="size-circle" style="width: 24px; height: 24px; background-color: #666;"></div><span style="font-size: 10px;">Very Common</span></div></div>
+            <div id="legend-quadrants"></div>
+            <div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid #555;">
+                <strong>Bubble Color:</strong>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #4CAF50;"></div>Beginner</div>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #FF9800;"></div>Intermediate</div>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #F44336;"></div>Advanced</div>
+            </div>
+            <div style="margin-top: 10px; padding-top: 6px; border-top: 1px solid #555;">
+                <strong>Bubble Size:</strong>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 8px; height: 8px; background-color: #666;"></div>Rare</div>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 16px; height: 16px; background-color: #666;"></div>Common</div>
+            </div>
         </div>
+        <div class="tooltip"></div>
     </div>
-    <div class="tooltip"></div>
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -448,9 +473,16 @@
         let currentView = 'radar', activeSpectrum = null, currentBubbles = null, currentAntonymBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null;
 
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 20] : [8, 30]);
+        const largestBubbleRadius = bubbleSizeScale.range()[1]; 
+
+        const difficultyColors = {
+            beginner: '#4CAF50',
+            intermediate: '#FF9800',
+            advanced: '#F44336'
+        };
         
-        const radarXScale = d3.scaleLinear().domain([-1.1, 1.1]).range([-maxRadius, maxRadius]);
-        const radarYScale = d3.scaleLinear().domain([-1.1, 1.1]).range([maxRadius, -maxRadius]);
+        const radarXScale = d3.scaleLinear().domain([-1.1, 1.1]).range([-maxRadius + largestBubbleRadius, maxRadius - largestBubbleRadius]);
+        const radarYScale = d3.scaleLinear().domain([-1.1, 1.1]).range([maxRadius - largestBubbleRadius, -maxRadius + largestBubbleRadius]);
 
         const spectrumRange = maxRadius * 0.8;
         const spectrumScale = d3.scaleLinear().domain([-1, 1]).range([-spectrumRange, spectrumRange]).clamp(true);
@@ -460,11 +492,9 @@
         const bubblesGroup = chartGroup.append("g").attr("class", "bubbles-container");
         const antonymsGroup = chartGroup.append("g").attr("class", "antonyms-container");
         const labelsGroup = chartGroup.append("g").attr("class", "labels-container");
-
+        
         const submitBtn = d3.select("#submit-btn");
         let currentSearch = { word: '', partOfSpeech: '', category: '' };
-        
-        // --- START OF RESTORED FUNCTIONS ---
         
         function updateSubmitButtonState() {
             const word = d3.select("#word-input").property("value").trim();
@@ -622,6 +652,29 @@
             return `<div class="metadata"><div class="metadata-item">${difficultyHTML}${frequencyHTML}</div></div>`;
         }
 
+        function drawQuadrantHighlights() {
+            const quadrantGroup = radarBgGroup.insert("g", ".radar-ring").attr("class", "quadrant-highlights");
+
+            const arcGenerator = d3.arc()
+                .innerRadius(0)
+                .outerRadius(maxRadius);
+
+            const quadrantData = [
+                { id: 0, startAngle: -Math.PI / 2, endAngle: 0 },
+                { id: 1, startAngle: 0, endAngle: Math.PI / 2 },
+                { id: 2, startAngle: Math.PI / 2, endAngle: Math.PI },
+                { id: 3, startAngle: Math.PI, endAngle: 3 * Math.PI / 2 }
+            ];
+
+            quadrantGroup.selectAll("path")
+                .data(quadrantData)
+                .enter()
+                .append("path")
+                .attr("class", "quadrant-highlight")
+                .attr("id", d => `quadrant-highlight-${d.id}`)
+                .attr("d", arcGenerator);
+        }
+
         function handleWordClick(event, d) {
             event.stopPropagation(); tooltip.style("opacity", 0);
             const node = d3.select(event.currentTarget);
@@ -737,10 +790,7 @@
                 return { error: error.message };
             }
         }
-
-        // --- END OF RESTORED FUNCTIONS ---
         
-        // --- Setup and Event Listeners ---
         submitBtn.on("click", (event) => { event.preventDefault(); handleFormSubmit(event); });
         drawRadarBackground();
         drawSpectrumView();
@@ -765,6 +815,7 @@
             if (!scanner.classed("hidden")) return;
             switchToRadarView().then(() => {
                 clearChart();
+                drawQuadrantHighlights();
                 mainTitle.text("Enter a word to build its Radar").style("cursor", "default");
                 inputContainer.classed("hidden", false);
                 senseSelector.classed("hidden", true);
@@ -801,10 +852,10 @@
         function drawWordBubbles(radarData) {
             const labelOffset = maxRadius + (isMobile ? 15 : 25);
             const axisLabels = [
-                { id: 'formality', text: 'FORMALITY', x: 0, y: -labelOffset, anchor: 'middle', endText: 'FORMAL' },
-                { id: 'style', text: 'STYLE', x: labelOffset, y: 0, anchor: 'start', endText: 'FIGURATIVE' },
-                { id: 'formality_neg', text: 'INFORMAL', x: 0, y: labelOffset, anchor: 'middle', isEnd: true },
-                { id: 'style_neg', text: 'LITERAL', x: -labelOffset, y: 0, anchor: 'end', isEnd: true }
+                { text: 'FORMAL', x: 0, y: -labelOffset, anchor: 'middle', spectrumType: 'formality', spectrumName: 'Formality', labels: ['INFORMAL', 'FORMAL'] },
+                { text: 'FIGURATIVE', x: labelOffset, y: 0, anchor: 'start', spectrumType: 'style', spectrumName: 'Style', labels: ['LITERAL', 'FIGURATIVE'] },
+                { text: 'INFORMAL', x: 0, y: labelOffset, anchor: 'middle', spectrumType: 'formality', spectrumName: 'Formality', labels: ['INFORMAL', 'FORMAL'] },
+                { text: 'LITERAL', x: -labelOffset, y: 0, anchor: 'end', spectrumType: 'style', spectrumName: 'Style', labels: ['LITERAL', 'FIGURATIVE'] }
             ];
 
             labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
@@ -812,13 +863,12 @@
                 .attr("x", d => d.x).attr("y", d => d.y)
                 .attr("text-anchor", d => d.anchor)
                 .attr("dominant-baseline", "middle")
-                .text(d => d.isEnd ? d.text : d.endText)
+                .text(d => d.text)
                 .on("click", (e, d) => {
-                    if (d.isEnd) return;
                     e.stopPropagation();
-                    switchToSpectrumView(d.id, {
-                        name: d.text, 
-                        labels: [axisLabels.find(l=>l.id===d.id+'_neg').text, d.endText]
+                    switchToSpectrumView(d.spectrumType, {
+                        name: d.spectrumName,
+                        labels: d.labels
                     });
                 });
 
@@ -829,7 +879,7 @@
             });
 
             const simulation = d3.forceSimulation(nodes)
-                .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 3).strength(0.8))
+                .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 4).strength(1))
                 .force("x", d3.forceX(d => d.radarX).strength(0.1))
                 .force("y", d3.forceY(d => d.radarY).strength(0.1))
                 .stop();
@@ -839,7 +889,7 @@
                 .data(nodes, d => d.term)
                 .enter().append("g").attr("class", "word-bubble");
 
-            currentBubbles.append("circle").attr("r", 0).style("fill", "#1f77b4")
+            currentBubbles.append("circle").attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
                 .transition().duration(500).delay((d,i) => i * 20).attr("r", d => bubbleSizeScale(d.frequency));
             currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
                 .transition().duration(500).delay((d,i) => i * 20).style("opacity", 1);
@@ -847,9 +897,18 @@
             setupTooltipEvents(currentBubbles);
 
             const antonymRadius = maxRadius + (isMobile ? 35 : 50);
+            const quadrantCenters = [ -Math.PI / 4, Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4 ];
+            const spreadAngle = Math.PI / 8; 
             const antonymNodes = radarData.antonyms.map((ant, i) => {
-                const angle = (i / radarData.antonyms.length) * 2 * Math.PI - (Math.PI / 2);
-                return { term: ant, x: antonymRadius * Math.cos(angle), y: antonymRadius * Math.sin(angle) };
+                const baseAngle = quadrantCenters[i % 4];
+                const offset = (Math.floor(i / 4) % 2 === 0 ? 1 : -1) * Math.floor(i / 4) * spreadAngle;
+                const angle = baseAngle + offset;
+
+                return {
+                    term: ant,
+                    x: antonymRadius * Math.cos(angle),
+                    y: antonymRadius * Math.sin(angle)
+                };
             });
             
             currentAntonymBubbles = antonymsGroup.selectAll(".antonym-bubble")
@@ -869,7 +928,6 @@
                 speak(d.term);
                 tooltip.transition().duration(200).style("opacity", .95);
                 tooltip.html(`<h3>${d.term}</h3><p><em>An opposite of "${currentRadarData.hub_word}"</em></p>`);
-                // Position tooltip
             }).on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
         }
         
@@ -947,8 +1005,31 @@
         
         function updateLegend(data) {
             legend.classed("hidden", !data);
-        }
+            if (!data) return;
 
+            const quadrantContainer = d3.select("#legend-quadrants");
+            quadrantContainer.html(""); 
+
+            const quadrantInfo = [
+                { id: 0, text: "Formal & Figurative" },
+                { id: 3, text: "Formal & Literal" },
+                { id: 1, text: "Informal & Figurative" },
+                { id: 2, text: "Informal & Literal" }
+            ];
+
+            quadrantContainer.selectAll(".legend-quadrant-item")
+                .data(quadrantInfo)
+                .enter()
+                .append("div")
+                .attr("class", "legend-quadrant-item")
+                .text(d => d.text)
+                .on("mouseover", (e, d) => {
+                    d3.select(`#quadrant-highlight-${d.id}`).style("opacity", 0.15);
+                })
+                .on("mouseout", (e, d) => {
+                    d3.select(`#quadrant-highlight-${d.id}`).style("opacity", 0);
+                });
+        }
     });
     </script>
 </body>
