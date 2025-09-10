@@ -15,34 +15,38 @@ function generateCacheKey(object, prompt) {
     return createHash('sha256').update(str).digest('hex');
 }
 
+// --- NEW, REVISED LLM PROMPT ---
 function getLLMPrompt(word, partOfSpeech, category, synonyms) {
-    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset. You will be given a hub word, a part of speech, and a list of related words. Your task is to filter and classify these words.
+    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset for language learners. You will be given a hub word, a part of speech, and a list of related words.
 
 REQUIREMENTS:
-1.  **FILTER FIRST:** From the provided "Synonyms" list, you MUST select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**. Discard any that do not fit this grammatical role. For example, if the part of speech is 'verb', keep 'watch' and 'look after', but discard nouns like 'guardian'.
-2.  Create 3-4 semantic facets (axes) for the hub word.
-3.  If a Focus Category is provided, one facet MUST relate to it.
-4.  For each word from your **filtered, grammatically-correct list**, generate: facet index, ring (0-3), frequency (0-100), a brief definition, a natural usage example, a difficulty rating ('beginner', 'intermediate', or 'advanced'), and intensity scores for all facets.
-5.  Ensure the classified words are distributed logically across ALL facets. Do not assign all words to just one facet.
+1.  **FILTER SYNONYMS:** From the provided "Synonyms" list, select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**. Discard any that do not fit this grammatical role.
+2.  **GENERATE ANTONYMS:** Provide a list of 3-5 distinct antonyms (opposites) for the hub word in its role as a ${partOfSpeech}.
+3.  **CLASSIFY FILTERED SYNONYMS:** For each word from your filtered list, generate the required data points.
+    *   **formality:** Score from -1.0 (very informal, slang) to 1.0 (very formal, academic). 0.0 is neutral.
+    *   **style:** Score from -1.0 (literal, denotative) to 1.0 (figurative, expressive, connotative). 0.0 is neutral.
+    *   **ring:** A categorical distance from the hub word's core meaning (0: Core, 1: Common, 2: Specific, 3: Nuanced).
+    *   **frequency:** A score from 0 (very rare) to 100 (very common).
+    *   **definition:** A brief, clear definition.
+    *   **example:** A natural usage example.
+    *   **difficulty:** 'beginner', 'intermediate', or 'advanced'.
 
 JSON Structure:
 {
   "hub_word": "original word",
-  "part_of_speech": "provided part of speech", 
-  "facets": [
-    {"name": "Semantic Dimension", "key": "dimension_key", "spectrumLabels": ["Low End", "High End"]}
-  ],
+  "part_of_speech": "provided part of speech",
   "rings": ["Core", "Common", "Specific", "Nuanced"],
+  "antonyms": ["opposite1", "opposite2", "opposite3"],
   "words": [
     {
       "term": "synonym_from_filtered_list",
-      "facet": 0,
       "ring": 1,
-      "frequency": 65,
+      "frequency": 75,
+      "formality": -0.3,
+      "style": 0.8,
       "definition": "Brief, clear definition for this specific synonym.",
       "example": "Natural usage example for the synonym.",
-      "difficulty": "intermediate",
-      "intensities": {"dimension_key": 0.5, "other_key": -0.3}
+      "difficulty": "intermediate"
     }
   ]
 }
@@ -51,27 +55,29 @@ Return ONLY valid JSON.`;
 
     let userPrompt = `Hub Word: "${word}"\nPart of Speech: "${partOfSpeech}"\n\nSynonyms to filter and classify:\n[${synonyms.map(s => `"${s}"`).join(', ')}]`;
     
+    // The category input is less relevant now with fixed axes, but can be kept for future use or to slightly influence results.
     if (category) {
-        userPrompt += `\n\nFocus Category: "${category}"`;
+        userPrompt += `\n\nFocus Category (for context): "${category}"`;
     }
     
     return { systemPrompt, userPrompt };
 }
 
-// --- NEW ENHANCED SENSE PROCESSING LOGIC ---
+
+// --- The rest of the file remains largely the same ---
+// The sense processing, caching, and API call logic are all still valid.
 
 function cleanDefinition(definition) {
     return definition
-        .replace(/{.*?}/g, '')      // Remove markup like {it}
-        .replace(/\s+/g, ' ')       // Normalize whitespace
-        .replace(/^:\s*/, '')       // Remove leading colons
-        .replace(/[;,].*$/, '')     // Keep only the first clause before a semicolon or comma
+        .replace(/{.*?}/g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/^:\s*/, '')
+        .replace(/[;,].*$/, '')
         .trim()
         .toLowerCase();
 }
 
 function calculateSimilarity(str1, str2) {
-    // Jaccard similarity based on word tokens
     const words1 = new Set(str1.split(/\s+/));
     const words2 = new Set(str2.split(/\s+/));
     const intersection = new Set([...words1].filter(x => words2.has(x)));
@@ -85,7 +91,6 @@ function processSensesWithClustering(
     maxTotalSenses = 8, 
     similarityThreshold = 0.5
 ) {
-    // 1. Pre-process and pre-sort by synonym count to establish cluster seeds
     const processedSenses = allRawSenses
         .map(sense => ({
             ...sense,
@@ -94,7 +99,6 @@ function processSensesWithClustering(
         }))
         .sort((a, b) => b.synonymCount - a.synonymCount);
 
-    // 2. Greedily cluster similar senses
     const clusters = [];
     for (const sense of processedSenses) {
         if (sense.synonymCount === 0) continue;
@@ -102,12 +106,9 @@ function processSensesWithClustering(
         let foundCluster = false;
         for (const cluster of clusters) {
             if (calculateSimilarity(sense.cleanDef, cluster.cleanDef) > similarityThreshold) {
-                // Merge into the existing cluster
                 const combinedSynonyms = new Set([...cluster.synonyms, ...sense.synonyms]);
                 cluster.synonyms = Array.from(combinedSynonyms);
                 cluster.synonymCount = cluster.synonyms.length;
-
-                // Keep the longer, likely more descriptive, definition as the representative
                 if (sense.definition.length > cluster.definition.length) {
                     cluster.definition = sense.definition;
                     cluster.cleanDef = sense.cleanDef;
@@ -118,15 +119,12 @@ function processSensesWithClustering(
         }
 
         if (!foundCluster) {
-            // No similar cluster found, create a new one
             clusters.push({ ...sense });
         }
     }
 
-    // 3. Sort final clusters by their aggregated synonym count
     const finalSenses = clusters.sort((a, b) => b.synonymCount - a.synonymCount);
 
-    // 4. Split into primary and additional for progressive disclosure
     if (finalSenses.length === 0) return { senses: [], hasMore: false };
     if (finalSenses.length <= primarySenseCount) return { senses: finalSenses, hasMore: false };
 
@@ -237,8 +235,7 @@ exports.handler = async (event, context) => {
                     return { definition, synonyms };
                 });
             });
-
-        // *** DROP-IN REPLACEMENT: Use the new clustering function ***
+        
         const processedSenses = processSensesWithClustering(allRawSenses);
         
         if (processedSenses.senses.length === 0) {
