@@ -152,9 +152,9 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
-async function getCachedLlmResponse({ word, partOfSpeech, synonyms }, store) { // <-- to
-    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, synonyms); // <-- to
-    const cacheKey = generateCacheKey({ word, partOfSpeech, synonyms }, systemPrompt); // <-- to
+async function getCachedLlmResponse({ word, partOfSpeech, synonyms }, store) {
+    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, synonyms);
+    const cacheKey = generateCacheKey({ word, partOfSpeech, synonyms }, systemPrompt);
     
     try {
         const cachedData = await store.get(cacheKey, { type: "json" });
@@ -194,8 +194,9 @@ exports.handler = async (event, context) => {
         try { store = getStore("word-radar-cache"); } catch (storeError) { console.warn('Failed to initialize blob store:', storeError.message); store = null; }
         
         if (synonyms && synonyms.length > 0) {
-            const apiResponse = store ? await getCachedLlmResponse({ word, partOfSpeech, category, synonyms }, store) : await (async () => {
-                const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, synonyms);
+            // --- FIX IS HERE: 'category' is removed from the calls ---
+            const apiResponse = store ? await getCachedLlmResponse({ word, partOfSpeech, synonyms }, store) : await (async () => {
+                const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, synonyms);
                 return await callOpenRouterWithFallback(systemPrompt, userPrompt);
             })();
             apiResponse.hub_word = word; apiResponse.part_of_speech = partOfSpeech;
@@ -236,10 +237,11 @@ exports.handler = async (event, context) => {
 
         if (processedSenses.senses.length === 1 && !processedSenses.hasMore) {
             console.log(`Single sense found for "${word}", proceeding directly to generation.`);
+            // --- FIX IS ALSO HERE: 'category' is removed from the calls ---
             const apiResponse = store ? 
-                await getCachedLlmResponse({ word, partOfSpeech, category, synonyms: processedSenses.senses[0].synonyms }, store) : 
+                await getCachedLlmResponse({ word, partOfSpeech, synonyms: processedSenses.senses[0].synonyms }, store) : 
                 await (async () => {
-                    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, category, processedSenses.senses[0].synonyms);
+                    const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, processedSenses.senses[0].synonyms);
                     return await callOpenRouterWithFallback(systemPrompt, userPrompt);
                 })();
             apiResponse.hub_word = word; 
