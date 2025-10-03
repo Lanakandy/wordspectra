@@ -947,8 +947,16 @@
                     currentBubbles.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
                 }
                 
-                // Draw new bubbles for the spectrum
-                const spectrumNodes = data.words;
+                // =================================================================
+                // START OF THE FIX
+                // Filter out the start and end words to avoid redundant bubbles.
+                const spectrumNodes = data.words.filter(word => 
+                    word.term.toLowerCase() !== data.start_word.toLowerCase() && 
+                    word.term.toLowerCase() !== data.end_word.toLowerCase()
+                );
+                // END OF THE FIX
+                // =================================================================
+
                 const spectrumSimulation = d3.forceSimulation(spectrumNodes)
                     .force("x", d3.forceX(node => spectrumScale(node.spectrum_position)).strength(1))
                     .force("y", d3.forceY(0).strength(0.05))
