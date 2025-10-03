@@ -910,50 +910,109 @@
             clearComparison();
             if (currentBubbles) currentBubbles.remove();
             if (currentAntonymBubbles) currentAntonymBubbles.remove();
+            // NEW: Also clear temporary spectrum bubbles
+            if (spectrumBubbles) {
+                spectrumBubbles.remove();
+                spectrumBubbles = null;
+            }
             labelsGroup.selectAll(".axis-label").remove();
             updateLegend(null);
         }
 
+        // =================================================================
+        // START: REVISED FUNCTION
+        // This function is completely rewritten to handle both cases.
+        // =================================================================
         function switchToSpectrumView(type, data) {
             clearComparison();
             currentView = 'spectrum';
             activeSpectrum = type;
-            mainTitle.text(`Spectrum: ${data.name}`);
 
-            if (type === 'antonym') {
-                spectrumGroup.select(".spectrum-label-left").text(currentRadarData.hub_word.toUpperCase());
-                spectrumGroup.select(".spectrum-label-right").text(data.antonym.toUpperCase());
-            } else {
-                spectrumGroup.select(".spectrum-label-left").text(data.labels[0].toUpperCase());
-                spectrumGroup.select(".spectrum-label-right").text(data.labels[1].toUpperCase());
-            }
-            
+            // Animate out radar elements
             labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
             antonymsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
             radarBgGroup.transition().duration(500).style("opacity", 0);
+            
+            // Animate in spectrum elements
             spectrumGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
 
-            const allNodes = currentBubbles.data();
-            
             if (type === 'antonym') {
-                currentBubbles.transition().duration(750).style("opacity", 0).attr("pointer-events", "none");
+                // Case 1: Displaying the new antonym spectrum
+                mainTitle.text(`Spectrum: "${data.start_word}" vs "${data.end_word}"`);
+                spectrumGroup.select(".spectrum-label-left").text(data.start_word.toUpperCase());
+                spectrumGroup.select(".spectrum-label-right").text(data.end_word.toUpperCase());
+
+                // Hide original radar bubbles
+                if (currentBubbles) {
+                    currentBubbles.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
+                }
+                
+                // Draw new bubbles for the spectrum
+                const spectrumNodes = data.words;
+                const spectrumSimulation = d3.forceSimulation(spectrumNodes)
+                    .force("x", d3.forceX(node => spectrumScale(node.spectrum_position)).strength(1))
+                    .force("y", d3.forceY(0).strength(0.05))
+                    .force("collide", d3.forceCollide(node => bubbleSizeScale(node.frequency) + (isMobile ? 2 : 3)).strength(0.8))
+                    .stop();
+                for (let i = 0; i < 150; ++i) { spectrumSimulation.tick(); }
+
+                // Create the temporary spectrum bubbles
+                spectrumBubbles = bubblesGroup.selectAll(".spectrum-bubble-temp")
+                    .data(spectrumNodes, d => d.term)
+                    .enter().append("g")
+                    .attr("class", "word-bubble spectrum-bubble-temp"); // Use a unique class
+
+                spectrumBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
+
+                spectrumBubbles.append("circle")
+                    .attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
+                    .transition().duration(500).delay((d, i) => 200 + i * 20)
+                    .attr("r", d => bubbleSizeScale(d.frequency));
+                
+                spectrumBubbles.append("text")
+                    .text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
+                    .transition().duration(500).delay((d, i) => 200 + i * 20)
+                    .style("opacity", 1);
+                
+                setupTooltipEvents(spectrumBubbles);
+
             } else {
+                // Case 2: Displaying formality/style spectrum (rearranges existing bubbles)
+                mainTitle.text(`Spectrum: ${data.name}`);
+                spectrumGroup.select(".spectrum-label-left").text(data.labels[0].toUpperCase());
+                spectrumGroup.select(".spectrum-label-right").text(data.labels[1].toUpperCase());
+
+                const allNodes = currentBubbles.data();
                 const spectrumSimulation = d3.forceSimulation(allNodes)
                     .force("x", d3.forceX(d => spectrumScale(d[type])).strength(1))
                     .force("y", d3.forceY(0).strength(0.05))
                     .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 2 : 3)).strength(0.8))
                     .stop();
                 for (let i = 0; i < 150; ++i) { spectrumSimulation.tick(); }
+                
                 currentBubbles.transition().duration(750).ease(d3.easeCubicOut)
                     .style("opacity", 1).attr("pointer-events", "auto")
                     .attr("transform", d => `translate(${d.x}, ${d.y})`);
             }
         }
+        // =================================================================
+        // END: REVISED FUNCTION
+        // =================================================================
+
 
         function switchToRadarView() {
             return new Promise(resolve => {
                 if (currentView !== 'spectrum') { resolve(); return; }
-                clearComparison(); currentView = 'radar'; activeSpectrum = null;
+                clearComparison(); 
+                currentView = 'radar';
+                
+                // NEW: Clean up the temporary spectrum bubbles when returning
+                if (spectrumBubbles) {
+                    spectrumBubbles.remove();
+                    spectrumBubbles = null;
+                }
+                
+                activeSpectrum = null;
                 if(currentRadarData) mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
                 
                 spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
@@ -980,7 +1039,7 @@
         
         function updateLegend(data) {
             legend.classed("hidden", !data);
-            }
+        }
     });
     </script>
 </body>
