@@ -423,7 +423,7 @@
         <div class="tooltip"></div>
     </div>
 
-    <script>
+<script>
     document.addEventListener('DOMContentLoaded', function() {
         const mainTitle = d3.select("#main-title");
         const inputContainer = d3.select("#input-container");
@@ -452,7 +452,8 @@
 
         const chartGroup = svg.append("g").attr("transform", `translate(${width / 2}, ${height / 2})`);
 
-        let currentView = 'radar', activeSpectrum = null, currentBubbles = null, currentAntonymBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null;
+        // MODIFIED: Added spectrumBubbles to track temporary bubbles
+        let currentView = 'radar', activeSpectrum = null, currentBubbles = null, currentAntonymBubbles = null, spectrumBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null;
 
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 20] : [8, 30]);
         const largestBubbleRadius = bubbleSizeScale.range()[1]; 
@@ -643,14 +644,18 @@
             } else { if (selectedWords.length < 2) { selectedWords.push(d); node.classed("selected", true); } }
             if (selectedWords.length === 2) {
                 showComparisonTooltip(selectedWords[0], selectedWords[1]);
-                currentBubbles.classed("dimmed", data => !selectedWords.some(sw => sw.term === data.term));
-            } else { tooltip.classed("comparison-tooltip", false); currentBubbles.classed("dimmed", false); }
+                const allBubbles = d3.selectAll('.word-bubble'); // Select all bubbles on screen
+                allBubbles.classed("dimmed", data => !selectedWords.some(sw => sw.term === data.term));
+            } else { 
+                tooltip.classed("comparison-tooltip", false); 
+                d3.selectAll('.word-bubble').classed("dimmed", false); 
+            }
         }
 
         function clearComparison() {
-            if (!currentBubbles) return; 
+            if (!currentBubbles && !spectrumBubbles) return; 
             selectedWords = [];
-            currentBubbles.classed("selected", false).classed("dimmed", false);
+            d3.selectAll('.word-bubble').classed("selected", false).classed("dimmed", false);
             tooltip.style("opacity", 0).classed("comparison-tooltip", false);
         }
         
@@ -728,11 +733,14 @@
                 alert("Sorry, there was an error exporting the image.");
             });
         }
-
-        async function fetchWordData(word, partOfSpeech, synonyms = null) {
+        
+        // MODIFIED: This function can now fetch both radar and spectrum data
+        async function fetchWordData(word, partOfSpeech, synonyms = null, antonym = null) {
             try {
-                const requestBody = { word, partOfSpeech }; // Category is removed
+                const requestBody = { word, partOfSpeech };
                 if (synonyms) { requestBody.synonyms = synonyms; }
+                if (antonym) { requestBody.antonym = antonym; } // <-- Add antonym if present
+
                 const response = await fetch('/.netlify/functions/word-radar-data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -834,27 +842,12 @@
                 return d;
             });
 
-            function boundingForce() {
-                for (let node of nodes) {
-                    const r = bubbleSizeScale(node.frequency);
-                    const distance = Math.sqrt(node.x * node.x + node.y * node.y);
-                    if (distance > maxRadius - r) {
-                        // If outside the boundary, move it back to the edge
-                        const angle = Math.atan2(node.y, node.x);
-                        node.x = (maxRadius - r) * Math.cos(angle);
-                        node.y = (maxRadius - r) * Math.sin(angle);
-                    }
-                }
-            }
-
             const simulation = d3.forceSimulation(nodes)
-                .force("bound", boundingForce) // <-- Add the custom bounding force
                 .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 4).strength(1))
                 .force("x", d3.forceX(d => d.radarX).strength(0.1))
                 .force("y", d3.forceY(d => d.radarY).strength(0.1))
                 .stop();
             
-            // Increase ticks to give forces more time to resolve
             for (let i = 0; i < 300; ++i) simulation.tick();
             
             currentBubbles = bubblesGroup.selectAll(".word-bubble")
@@ -875,12 +868,7 @@
                 const baseAngle = quadrantCenters[i % 4];
                 const offset = (Math.floor(i / 4) % 2 === 0 ? 1 : -1) * Math.floor(i / 4) * spreadAngle;
                 const angle = baseAngle + offset;
-
-                return {
-                    term: ant,
-                    x: antonymRadius * Math.cos(angle),
-                    y: antonymRadius * Math.sin(angle)
-                };
+                return { term: ant, x: antonymRadius * Math.cos(angle), y: antonymRadius * Math.sin(angle) };
             });
             
             currentAntonymBubbles = antonymsGroup.selectAll(".antonym-bubble")
@@ -893,9 +881,24 @@
                 .transition().duration(500).delay((d, i) => 500 + i * 50).style("opacity", 1);
             currentAntonymBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
             
-            currentAntonymBubbles.on("click", (e, d) => {
+            // MODIFIED: Click handler now fetches data before switching view
+            currentAntonymBubbles.on("click", async (e, d) => {
                 e.stopPropagation();
-                switchToSpectrumView('antonym', { name: `"${currentRadarData.hub_word}" vs "${d.term}"`, antonym: d.term });
+                mainTitle.text(`Generating spectrum for "${currentRadarData.hub_word}" vs "${d.term}"...`);
+                scanner.classed("hidden", false);
+                try {
+                    const spectrumData = await fetchWordData(currentRadarData.hub_word, null, null, d.term);
+                    scanner.classed("hidden", true);
+                    if (spectrumData && spectrumData.words) {
+                        switchToSpectrumView('antonym', spectrumData);
+                    } else {
+                        mainTitle.text(spectrumData.error || "Could not generate spectrum.");
+                    }
+                } catch (error) {
+                    scanner.classed("hidden", true);
+                    mainTitle.text("Error generating spectrum.");
+                    console.error(error);
+                }
             }).on("mouseover", (e, d) => {
                 speak(d.term);
                 tooltip.transition().duration(200).style("opacity", .95);
