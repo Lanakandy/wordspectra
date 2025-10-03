@@ -947,15 +947,11 @@
                     currentBubbles.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
                 }
                 
-                // =================================================================
-                // START OF THE FIX
                 // Filter out the start and end words to avoid redundant bubbles.
                 const spectrumNodes = data.words.filter(word => 
                     word.term.toLowerCase() !== data.start_word.toLowerCase() && 
                     word.term.toLowerCase() !== data.end_word.toLowerCase()
                 );
-                // END OF THE FIX
-                // =================================================================
 
                 const spectrumSimulation = d3.forceSimulation(spectrumNodes)
                     .force("x", d3.forceX(node => spectrumScale(node.spectrum_position)).strength(1))
@@ -968,9 +964,14 @@
                 spectrumBubbles = bubblesGroup.selectAll(".spectrum-bubble-temp")
                     .data(spectrumNodes, d => d.term)
                     .enter().append("g")
-                    .attr("class", "word-bubble spectrum-bubble-temp"); // Use a unique class
+                    .attr("class", "word-bubble spectrum-bubble-temp");
 
+                // =================================================================
+                // START OF THE FIX
+                // This line applies the X and Y coordinates calculated by the simulation.
                 spectrumBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
+                // END OF THE FIX
+                // =================================================================
 
                 spectrumBubbles.append("circle")
                     .attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
