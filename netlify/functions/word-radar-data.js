@@ -62,7 +62,7 @@ function getAntonymSpectrumPrompt(startWord, endWord) {
     const systemPrompt = `You are a linguist creating a dataset for a word spectrum (cline) visualization. You will be given a starting word and an ending word which are opposites.
 
 REQUIREMENTS:
-1.  **GENERATE SPECTRUM:** Generate a list of 5-7 intermediate words that form a semantic gradient between the \`start_word\` and the \`end_word\`.
+1.  **GENERATE SPECTRUM:** Generate a list of 7-12 intermediate words that form a semantic gradient between the \`start_word\` and the \`end_word\`.
 2.  **INCLUDE ENDPOINTS:** The final list of words MUST begin with the \`start_word\` and end with the \`end_word\`.
 3.  **PROVIDE DATA:** For EACH word in the full list (including start and end), provide the following data points:
     *   **term**: The word itself.
