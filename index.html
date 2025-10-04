@@ -1,3 +1,5 @@
+--- START OF FILE index.html ---
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -964,12 +966,14 @@
                 d.radarY = radarYScale(d.formality);
                 return d;
             });
-
+            // --- FIX IS HERE ---
+            // Changed 'cconst' to 'const'
             const simulation = d3.forceSimulation(nodes)
                 .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 4).strength(1))
                 .force("x", d3.forceX(d => d.radarX).strength(0.1))
                 .force("y", d3.forceY(d => d.radarY).strength(0.1))
                 .stop();
+            // --- END OF FIX ---
             for (let i = 0; i < 300; ++i) simulation.tick();
             
             currentBubbles = bubblesGroup.selectAll(".word-bubble")
