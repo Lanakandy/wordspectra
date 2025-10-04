@@ -57,6 +57,7 @@ JSON Structure:
 
 // =================================================================
 // START OF NEW SECTION: Prompt for Antonym Spectrum
+// This is the new prompt for your Cline Builder.
 // =================================================================
 function getAntonymSpectrumPrompt(startWord, endWord) {
     const systemPrompt = `You are a linguist creating a dataset for a word spectrum (cline) visualization. You will be given a starting word and an ending word which are opposites.
@@ -123,6 +124,7 @@ async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY; if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.'); const modelsToTry = [ "openrouter/sonoma-sky-alpha", "openrouter/sonoma-dusk-alpha", "mistralai/mistral-small-3.2-24b-instruct:free", "openai/gpt-oss-120b:free", "google/gemini-flash-1.5-8b" ]; for (const model of modelsToTry) { console.log(`Attempting API call with model: ${model}`); try { const response = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] }) }); if (!response.ok) { const errorBody = await response.text(); console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`); continue; } const data = await response.json(); if (data.choices && data.choices[0] && data.choices[0].message?.content) { console.log(`Successfully received response from: ${model}`); try { return JSON.parse(data.choices[0].message.content); } catch (parseError) { console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`); continue; } } else { console.warn(`Model '${model}' returned no choices. Trying next model.`); } } catch (error) { console.error(`An unexpected network error occurred with model '${model}':`, error); } } throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
+// MODIFIED: This function now handles different request types for caching.
 async function getCachedLlmResponse(payload, store, type = 'radar') {
     let systemPrompt, userPrompt, cacheKeyPayload;
     if (type === 'spectrum') {
@@ -151,13 +153,14 @@ exports.handler = async (event, context) => {
 
     try {
         const body = JSON.parse(event.body || '{}');
-        const { word, partOfSpeech, synonyms, antonym } = body; // <-- Added 'antonym'
+        const { word, partOfSpeech, synonyms, antonym } = body; // MODIFIED: 'antonym' is now a key variable
         
         let store;
         try { store = getStore("word-radar-cache"); } catch (storeError) { console.warn('Failed to initialize blob store:', storeError.message); store = null; }
 
         // =================================================================
         // START OF NEW SECTION: Handle Antonym Spectrum Request
+        // This new block checks if the request is for a cline.
         // =================================================================
         if (word && antonym) {
             console.log(`Generating antonym spectrum for "${word}" vs "${antonym}"`);
