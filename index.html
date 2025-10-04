@@ -552,6 +552,14 @@
             }
         }
 
+      let inputDebounceTimer;
+      d3.select('#word-input').on('input', function() {
+          clearTimeout(inputDebounceTimer);
+          inputDebounceTimer = setTimeout(() => {
+            updateSubmitButtonState();
+        }, 150);
+      });
+
         async function handleFormSubmit(event) {
             event.preventDefault();
             currentSearch.word = d3.select("#word-input").property("value").trim();
@@ -704,7 +712,16 @@
             });
         }
 
-        function speak(text, lang = 'en-US') { if ('speechSynthesis' in window && isSoundOn) { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = lang; window.speechSynthesis.speak(u); } }
+        function speak(text, lang = 'en-US') { 
+            if ('speechSynthesis' in window && isSoundOn) { 
+                window.speechSynthesis.cancel(); 
+                let u = new SpeechSynthesisUtterance(text); 
+                u.lang = lang; 
+                u.rate = 0.9;
+                u.onend = () => u = null;
+                window.speechSynthesis.speak(u); 
+            } 
+        }
 
         function setupTooltipEvents(selection) {
             selection.on("click", handleWordClick).on("mouseover", (event, d) => {
@@ -713,11 +730,18 @@
                 tooltip.transition().duration(200).style("opacity", .95);
                 const metadataHTML = getMetadataHTML(d);
                 tooltip.html(`<h3>${d.term}</h3><p>${d.definition}</p><div class="example">e.g., "${d.example}"</div>${metadataHTML}`);
-                const r = tooltip.node().getBoundingClientRect();
-                let l = event.pageX + 15, t = event.pageY - 28;
-                if (l + r.width > window.innerWidth) l = event.pageX - r.width - 15;
-                if (t + r.height > window.innerHeight) t = event.pageY - r.height - 15;
-                if (t < 0) t = event.pageY + 15;
+                const tooltipNode = tooltip.node();
+                const r = tooltipNode.getBoundingClientRect();
+                const containerRect = container.node().getBoundingClientRect();
+                
+                let l = event.pageX - containerRect.left + 15;
+                let t = event.pageY - containerRect.top - 28;
+                
+                if (l + r.width > containerRect.width) { l = event.pageX - containerRect.left - r.width - 15; }
+                if (t + r.height > containerRect.height) { t = event.pageY - containerRect.top - r.height - 15; }
+                if (t < 0) { t = event.pageY - containerRect.top + 15; }
+                if (l < 0) l = 10;
+                
                 tooltip.style("left", l + "px").style("top", t + "px");
             }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } });
         }
@@ -753,17 +777,25 @@
 
         async function fetchWordData(payload) {
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                
                 const response = await fetch('/.netlify/functions/word-radar-data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
+                
                 if (!response.ok) {
-                    const errorData = await response.json();
+                    const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.error || `Server Error: ${response.status}`);
                 }
                 return await response.json();
             } catch (error) {
+                if (error.name === 'AbortError') { return { error: 'Request timeout - please try again' }; }
                 console.error("Failed to fetch word data:", error);
                 return { error: error.message };
             }
@@ -850,7 +882,7 @@
                 .force("y", d3.forceY(d => spectrumYScale(d.formality)).strength(1))
                 .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + (isMobile ? 3 : 4)).strength(0.7))
                 .stop();
-            for (let i = 0; i < 200; ++i) { simulation.tick(); }
+            for (let i = 0; i < 300; ++i) { simulation.tick(); }
 
             const drag = d3.drag()
                 .on("start", (event, d) => {
@@ -868,7 +900,7 @@
                 });
             
             const bubbles = bubblesGroup.selectAll(".spectrum-bubble")
-                .data(nodes, d => d.term);
+                .data(nodes, d => d.term); // Use key function to identify bubbles
 
             bubbles.exit()
                 .transition().duration(300)
@@ -1073,9 +1105,7 @@
             legend.classed("hidden", !data);
         }
         
-        // Final setup calls
         submitBtn.on("click", (event) => { event.preventDefault(); handleFormSubmit(event); });
-        // THE FIX IS HERE: Corrected the function name from 'drawRadarBackground' to 'drawRadarBackground'
         drawRadarBackground();
         drawSpectrumView();
         wordForm.on("submit", handleFormSubmit);
