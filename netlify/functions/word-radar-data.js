@@ -4,7 +4,6 @@ const fetch = require('node-fetch');
 const { getStore } = require('@netlify/blobs');
 const { createHash } = require('crypto');
 
-// ... (generateCacheKey, getLLMPrompt, cleanDefinition, calculateSimilarity, processSensesWithClustering functions are unchanged) ...
 function generateCacheKey(object, prompt) {
     const ordered = Object.keys(object)
         .sort()
@@ -56,20 +55,26 @@ JSON Structure:
     return { systemPrompt, userPrompt };
 }
 
-// MODIFIED: Added 'formality' to the required data points
 function getAntonymSpectrumPrompt(startWord, endWord) {
-    const systemPrompt = `You are a linguist creating a dataset for a word spectrum (cline) visualization. You will be given a starting word and an ending word which are opposites.
+    const systemPrompt = `You are a linguist creating a dataset for a word spectrum (cline) visualization. You will be given two words that represent opposite ends of a semantic spectrum.
 
 REQUIREMENTS:
-1.  **GENERATE SPECTRUM:** Generate a list of 8-12 intermediate words that form a semantic gradient between the \`start_word\` and the \`end_word\`.
+1. **GENERATE SPECTRUM:** Generate 8-12 intermediate words that form a smooth semantic gradient between the start_word and end_word. Words should progress gradually with no sudden jumps in meaning.
 2.  **INCLUDE ENDPOINTS:** The final list of words MUST begin with the \`start_word\` and end with the \`end_word\`.
 3.  **PROVIDE DATA:** For EACH word in the full list (including start and end), provide the following data points:
     *   **term**: The word itself.
-    *   **spectrum_position**: A score from -1.0 (representing the \`start_word\`) to 1.0 (representing the \`end_word\`).
-    *   **formality**: Score from -1.0 (very informal) to 1.0 (very formal). 0.0 is neutral.
+    *   **spectrum_position**: A score from -1.0 (start_word) to 1.0 (end_word). 
+        - Distribute positions to reflect semantic distance, not just equal intervals
+        - Words closer in meaning should have closer position scores
+        - The start_word is always -1.0, the end_word is always 1.0
+    *   **formality**: Score from -1.0 (slang/colloquial, e.g., "yummy") through 0.0 (neutral, e.g., "good") to 1.0 (formal/technical, e.g., "efficacious").
     *   **definition**: A brief, clear definition.
     *   **example**: A natural usage example.
-    *   **frequency**: A score from 0 (very rare) to 100 (very common).
+    *   **frequency**: Score from 0-100 based on everyday usage:
+        - 80-100: Very common (e.g., "good", "bad", "happy")
+        - 50-79: Common (e.g., "adequate", "pleasant")
+        - 20-49: Uncommon (e.g., "felicitous", "mediocre")
+        - 0-19: Rare (e.g., "pusillanimous", "ebullient")
     *   **difficulty**: 'beginner', 'intermediate', or 'advanced'.
 
 JSON Structure:
@@ -140,7 +145,7 @@ function processSensesWithClustering( allRawSenses, primarySenseCount = 3, maxTo
 }
 
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY; if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.'); const modelsToTry = [ "mistralai/mistral-small-3.2-24b-instruct:free", "openai/gpt-oss-120b:free", "google/gemini-flash-1.5-8b" ]; for (const model of modelsToTry) { console.log(`Attempting API call with model: ${model}`); try { const response = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] }) }); if (!response.ok) { const errorBody = await response.text(); console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`); continue; } const data = await response.json(); if (data.choices && data.choices[0] && data.choices[0].message?.content) { console.log(`Successfully received response from: ${model}`); try { return JSON.parse(data.choices[0].message.content); } catch (parseError) { console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`); continue; } } else { console.warn(`Model '${model}' returned no choices. Trying next model.`); } } catch (error) { console.error(`An unexpected network error occurred with model '${model}':`, error); } } throw new Error("All AI models failed to provide a valid response. Please try again later.");
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY; if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.'); const modelsToTry = [ "mistralai/mistral-7b-instruct:free", "openai/gpt-3.5-turbo-1106", "google/gemini-flash-1.5" ]; for (const model of modelsToTry) { console.log(`Attempting API call with model: ${model}`); try { const response = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] }) }); if (!response.ok) { const errorBody = await response.text(); console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`); continue; } const data = await response.json(); if (data.choices && data.choices[0] && data.choices[0].message?.content) { console.log(`Successfully received response from: ${model}`); try { return JSON.parse(data.choices[0].message.content); } catch (parseError) { console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`); continue; } } else { console.warn(`Model '${model}' returned no choices. Trying next model.`); } } catch (error) { console.error(`An unexpected network error occurred with model '${model}':`, error); } } throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
 // MODIFIED: This function can now handle 'singleWord' type
@@ -203,7 +208,6 @@ exports.handler = async (event, context) => {
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
         
-        // ... (rest of the handler for radar view is unchanged) ...
         if (!word || !partOfSpeech) return { statusCode: 400, headers, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         
         if (synonyms && synonyms.length > 0) {
@@ -237,7 +241,6 @@ exports.handler = async (event, context) => {
 
         console.log(`Multiple consolidated senses found for "${word}" (${processedSenses.senses.length} primary, ${processedSenses.additionalSenses?.length || 0} additional), returning for user selection.`);
         return { statusCode: 200, headers, body: JSON.stringify({ senses: processedSenses.senses, additionalSenses: processedSenses.additionalSenses, hasMore: processedSenses.hasMore }) };
-
 
     } catch (error) {
         console.error("Function Error:", error);
