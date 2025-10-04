@@ -1,13 +1,427 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- ... (head content is unchanged) ... -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word Radar</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        /* ... (styles are unchanged) ... */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1a1a2e;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        }
+
+        #input-container { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px; /* Spacing between inputs */
+        }
+
+        #word-input { 
+            background: rgba(255, 255, 255, 0.1); 
+            border: 2px solid #9a9ac8; 
+            border-radius: 8px; 
+            color: white; 
+            font-size: clamp(16px, 5vw, 24px); 
+            font-weight: bold; 
+            text-align: center; 
+            padding: clamp(8px, 2vw, 10px) clamp(15px, 4vw, 20px); 
+            width: clamp(220px, 60vw, 300px); 
+            outline: none; 
+            transition: all 0.2s ease; 
+            -webkit-text-size-adjust: 100%; 
+        }
+        #word-input:focus { background: rgba(255, 255, 255, 0.2); transform: scale(1.05); }
+
+        #pos-selector {
+            display: flex;
+            gap: 10px;
+        }
+        .pos-option {
+            background: rgba(40, 40, 60, 0.9);
+            border: 1px solid #9a9ac8;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: clamp(12px, 3vw, 14px);
+            font-weight: 600;
+            color: #e0e0e0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .pos-option:hover {
+            background: rgba(255, 107, 71, 0.9);
+        }
+        .pos-option.selected {
+            background-color: #FF6B47;
+            color: #1a1a2e;
+            border-color: #FF6B47;
+            transform: scale(1.05);
+        }
+
+        #category-input, #custom-words-input {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px dashed #7a7a9f;
+            border-radius: 8px;
+            color: white;
+            font-size: clamp(12px, 3.5vw, 14px);
+            text-align: center;
+            padding: 8px 15px;
+            width: clamp(220px, 60vw, 300px);
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        #category-input::placeholder, #custom-words-input::placeholder {
+            color: #9a9ac8;
+            opacity: 0.7;
+        }
+        #category-input:focus, #custom-words-input:focus {
+            background: rgba(255, 255, 255, 0.1);
+            border-style: solid;
+        }
+        #custom-words-input {
+            resize: vertical;
+            height: 60px;
+            text-align: left;
+            padding: 10px;
+        }
+
+        #submit-btn {
+            background-color: #FF6B47;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: clamp(14px, 4vw, 16px);
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.2s ease;
+            width: clamp(220px, 60vw, 300px);
+        }
+        #submit-btn:hover {
+            transform: scale(1.05);
+            background-color: #ffca85;
+        }
+        #sense-selector {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: rgba(40, 40, 60, 0.95);
+            border: 1px solid #9a9ac8;
+            border-radius: 12px;
+            padding: clamp(20px, 5vw, 30px);
+            max-height: 85vh;
+            max-width: clamp(300px, 80vw, 500px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #sense-title {
+            margin: 0 0 10px 0;
+            font-size: clamp(16px, 4vw, 20px);
+            text-align: center;
+        }
+        #sense-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            overflow-y: auto;
+            padding-right: 10px;
+            margin-right: -10px;
+        }
+
+        #sense-options::-webkit-scrollbar {
+        width: 8px;
+        }
+        #sense-options::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 4px;
+        }
+        #sense-options::-webkit-scrollbar-thumb {
+        background-color: #7a7a9f;
+        border-radius: 4px;
+        }
+        #sense-options::-webkit-scrollbar-thumb:hover {
+        background-color: #9a9ac8;
+        }
+        .sense-option-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #7a7a9f;
+            border-radius: 8px;
+            padding: 12px;
+            color: #e0e0e0;
+            font-size: clamp(14px, 3.5vw, 16px);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+        .sense-option-btn:hover {
+            background: rgba(255, 107, 71, 0.9);
+            border-color: #FF6B47;
+            color: #1a1a2e;
+        }
+
+        #show-more-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px dashed #7a7a9f;
+            border-radius: 8px;
+            padding: 10px 16px;
+            color: #9a9ac8;
+            font-size: clamp(12px, 3vw, 14px);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s ease;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        #show-more-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #FF6B47;
+            color: #FF6B47;
+        }
+
+        .additional-senses {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .additional-senses.expanded {
+            max-height: 400px; /* Adjust based on your needs */
+        }
+
+        .sense-divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #7a7a9f, transparent);
+            margin: 15px 0 10px 0;
+        }
+        @media (max-width: 768px) { 
+            #word-input { font-size: 16px; padding: 12px 16px; width: min(80vw, 300px); } 
+            #input-container { gap: 12px; }
+            .pos-option { padding: 6px 12px; font-size: 12px; }
+            #category-input, #custom-words-input { font-size: 12px; padding: 8px 12px; width: min(80vw, 300px); }
+        }
+
+        .header-logo { position: absolute; top: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); width: clamp(60px, 12vw, 90px); opacity: 1; transition: opacity 0.2s; }
+        .header-logo:hover { opacity: 0.7; }
+        
+        #top-right-controls {
+            position: absolute;
+            top: clamp(10px, 2vh, 20px);
+            right: clamp(10px, 2vw, 20px);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-end;
+            z-index: 100;
+        }
+        .control-btn {
+            background: rgba(40, 40, 60, 0.9);
+            border: 1px solid #9a9ac8;
+            border-radius: 8px;
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: all 0.2s;
+            min-width: 130px; /* Add this to set a consistent minimum width */
+            justify-content: center; /* Add this to center the icon and text */
+        }
+        .control-btn:hover { background: rgba(60, 60, 80, 0.9); }
+        .control-btn .control-icon {
+            width: clamp(16px, 4vw, 20px);
+            height: clamp(16px, 4vw, 20px);
+            margin-right: 8px;
+            fill: #c0c0e0;
+        }
+        .control-btn .control-label {
+            font-size: clamp(10px, 2.5vw, 12px);
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+        #sound-toggle.sound-off .slash-icon { display: block; }
+        #sound-toggle.sound-off path:not(.slash-icon) { opacity: 0.4; }
+        #sound-toggle .slash-icon { display: none; }
+        
+        h1 { color: #ffffff; font-weight: 300; text-align: center; cursor: pointer; transition: color 0.2s; font-size: clamp(1.2rem, 4vw, 2rem); margin: clamp(10px, 2vh, 20px) 10px; padding: 0 10px; }
+        h1:hover { color: #ffca85; }
+        #chart-container { position: relative; width: calc(100vw - 20px); height: calc(100vh - 80px); max-width: 800px; max-height: 800px; min-width: 300px; min-height: 300px; }
+        @media (max-width: 768px) { #chart-container { width: calc(100vw - 10px); height: calc(100vh - 60px); } h1 { font-size: clamp(1rem, 5vw, 1.5rem); margin: 5px; } }
+        @media (max-height: 600px) { #chart-container { height: calc(100vh - 40px); } h1 { margin: 5px; } }
+        .hidden { display: none !important; }
+        #radar-scanner { position: absolute; top: 5%; left: 50%; margin-left: -1px; width: 2px; height: 45%; background: linear-gradient(to top, rgba(255, 107, 71, 0.8) 0%, rgba(255, 107, 71, 0) 100%); transform-origin: bottom center; animation: spin 3s linear infinite; z-index: 5; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .radar-background, .spectrum-view { transition: opacity 0.5s ease-in-out; }
+        .radar-ring { stroke: #4f4f7a; stroke-width: 1px; transition: r 0.5s ease-out, opacity 0.5s ease-out; }
+        .axis-line { stroke: #5f5f8a; stroke-width: 1.5px; transition: all 0.5s ease-out; }
+        .axis-label { fill: #c0c0e0; font-size: clamp(12px, 3vw, 14px); font-weight: 600; text-transform: uppercase; cursor: pointer; transition: fill 0.2s ease-in-out, opacity 0.5s ease-in-out; }
+        .axis-label:hover { fill: #ffca85; }
+        .axis-label.active { fill: #ffca85; font-weight: 700; }
+        .spectrum-axis { stroke: #9a9ac8; stroke-width: 2px; stroke-dasharray: 4 4; }
+        .spectrum-label { fill: #c0c0e0; font-size: clamp(12px, 3vw, 14px); font-weight: 600; text-transform: uppercase; text-anchor: middle; }
+        .word-bubble { transition: opacity 0.5s ease-in-out, transform 0.75s ease-out; cursor: pointer; }
+        .word-bubble circle { cursor: pointer; transition: transform 0.2s ease-out, stroke-width 0.2s ease-out, stroke 0.2s ease-out; stroke: #1a1a2e; stroke-width: 2px; }
+        .word-bubble:hover circle { transform: scale(1.1); stroke: #ffffff; stroke-width: 3px; }
+        .word-bubble.selected circle { stroke: #ffca85; stroke-width: 4px; transform: scale(1.15); }
+        .word-bubble.dimmed { opacity: 0.25; pointer-events: none; }
+        .word-bubble text { fill: #ffffff; font-size: clamp(10px, 2.5vw, 12px); font-weight: bold; text-anchor: middle; pointer-events: none; text-shadow: 0 0 4px #000000; }
+        .antonym-bubble circle { fill: #9467bd !important; }
+        @media (max-width: 768px) { .word-bubble:active circle { transform: scale(1.15); stroke: #ffffff; stroke-width: 3px; } .axis-label:active { fill: #ffca85; } }
+        .tooltip { position: absolute; background-color: rgba(40, 40, 60, 0.95); border: 1px solid #9a9ac8; border-radius: 8px; padding: clamp(8px, 2vw, 12px); color: #e0e0e0; opacity: 0; pointer-events: none; transition: opacity 0.2s; max-width: clamp(220px, 70vw, 280px); font-size: clamp(12px, 3vw, 14px); box-shadow: 0 4px 15px rgba(0,0,0,0.4); backdrop-filter: blur(5px); z-index: 1000; }
+        .tooltip h3 { margin: 0 0 4px 0; color: #ffffff; font-size: clamp(14px, 3.5vw, 16px); }
+        .tooltip p { margin: 0 0 8px 0; font-style: italic; color: #c0c0e0; line-height: 1.3; }
+        .tooltip .example { font-style: normal; background-color: rgba(0,0,0,0.2); padding: 4px; border-radius: 4px; font-family: monospace; font-size: clamp(11px, 2.5vw, 13px); }
+        .tooltip .metadata { margin-top: 6px; padding-top: 6px; border-top: 1px solid #555; font-size: clamp(10px, 2.5vw, 12px); }
+        .tooltip .difficulty { display: inline-block; padding: 2px 4px; border-radius: 3px; font-size: clamp(8px, 2vw, 10px); font-weight: bold; text-transform: uppercase; }
+        .difficulty.beginner { background-color: #4CAF50; color: white; }
+        .difficulty.intermediate { background-color: #FF9800; color: white; }
+        .difficulty.advanced { background-color: #F44336; color: white; }
+        .comparison-tooltip { max-width: clamp(300px, 90vw, 500px); }
+        .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .comparison-col h4 { margin: 0 0 5px; color: #ffca85; }
+        .comparison-col p { font-size: clamp(11px, 2.8vw, 13px); }
+        .comparison-close { position: absolute; top: 8px; right: 10px; cursor: pointer; font-size: 18px; color: #aaa; }
+        .comparison-close:hover { color: white; }
+        
+        @media (max-width: 768px) {
+            .comparison-tooltip {
+                width: 90vw;
+                max-width: 90vw;
+                left: 5vw !important; 
+                top: 50% !important;
+                transform: translateY(-50%) !important;
+            }
+            .comparison-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+        }
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 8px; /* Spacing between difficulty and frequency */
+        }
+
+        .frequency-indicator {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 12px; /* Set a fixed height */
+        }
+
+        .freq-bar {
+            width: 4px;
+            background-color: #555; /* Inactive bar color */
+            border-radius: 1px;
+            transition: all 0.2s;
+        }
+
+        /* Heights for the different bars */
+        .freq-bar:nth-child(1) { height: 40%; }
+        .freq-bar:nth-child(2) { height: 60%; }
+        .freq-bar:nth-child(3) { height: 80%; }
+        .freq-bar:nth-child(4) { height: 100%; }
+
+        /* Active colors based on frequency level */
+        .freq-1 .freq-bar:nth-child(-n+1),
+        .freq-2 .freq-bar:nth-child(-n+2),
+        .freq-3 .freq-bar:nth-child(-n+3),
+        .freq-4 .freq-bar:nth-child(-n+4) {
+            background-color: #9a9ac8; /* Active bar color */
+        }
+        
+        #legend { position: absolute; bottom: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); background: rgba(40, 40, 60, 0.9); border: 1px solid #9a9ac8; border-radius: 8px; padding: clamp(10px, 2vw, 15px); font-size: clamp(10px, 2.5vw, 12px); color: #e0e0e0; max-width: clamp(150px, 35vw, 200px); backdrop-filter: blur(5px); transition: opacity 0.5s ease-in-out; }
+        #legend h4 { margin: 0 0 8px 0; color: #ffffff; font-size: clamp(12px, 3vw, 14px); }
+        #legend .legend-size-demo { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+        #legend .size-circle { border-radius: 50%; }
+        @media (max-width: 768px) { #legend { bottom: 5px; left: 5px; padding: 8px; max-width: min(40vw, 180px); font-size: 10px; } #legend h4 { font-size: 11px; margin-bottom: 6px; } }
+        @media (max-height: 600px) { #legend { display: none; } }
     </style>
 </head>
 <body>
-    <!-- ... (body HTML is unchanged) ... -->
+    <img src="https://eltcation.com/wp-content/uploads/2025/06/ELTcation_left.png" alt="ELTcation Logo" class="header-logo">
+    
+    <div id="top-right-controls">
+        <div id="sound-toggle" class="control-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
+                <path d="M16.364 3.636a1 1 0 0 1 0 1.414l-1.414 1.414a5 5 0 0 0 0 7.072l1.414 1.414a1 1 0 0 1-1.414 1.414l-1.414-1.414a7 7 0 0 1 0-9.898l1.414-1.414a1 1 0 0 1 1.414 0zM12 5.05L12 19.05a1 1 0 0 1-1.638.766L6 15H3a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1h3l4.362-4.816A1 1 0 0 1 12 5.05zm7.07 7.07a1 1 0 0 1-1.414-1.414l1.414-1.414a3 3 0 0 0 0-4.242l-1.414-1.414a1 1 0 1 1 1.414-1.414l1.414 1.414a5 5 0 0 1 0 7.07z"/>
+                <path class="slash-icon" d="M4.707 3.293a1 1 0 0 1 1.414 0l14.293 14.293a1 1 0 0 1-1.414 1.414L3.293 4.707a1 1 0 0 1 0-1.414z"/>
+            </svg>
+            <span class="control-label">Sound ON</span>
+        </div>
+        <div id="export-btn" class="control-btn hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
+                <path d="M12 16a1 1 0 0 1-1-1V4a1 1 0 1 1 2 0v11a1 1 0 0 1-1 1zm0 2a1 1 0 0 1-.707-.293l-4-4a1 1 0 1 1 1.414-1.414L12 15.586l3.293-3.293a1 1 0 1 1 1.414 1.414l-4 4A1 1 0 0 1 12 18zm-8 4a1 1 0 0 1-1-1V7a1 1 0 1 1 2 0v13H4zM20 7a1 1 0 1 1-2 0v13h-2a1 1 0 1 1 0-2h2V7z"/>
+            </svg>
+            <span class="control-label">Export PNG</span>
+        </div>
+        <div id="restart-btn" class="control-btn hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
+                <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3.293-2.293a1 1 0 0 1 0-1.414l.707-.707A5.001 5.001 0 0 1 12 7a5 5 0 0 1 5 5h-2a3 3 0 0 0-3-3 3 3 0 0 0-2.121.879l.707.707a1 1 0 1 1-1.414 1.414l-2-2a1 1 0 0 1 0-1.414l2-2a1 1 0 1 1 1.414 1.414l-.707.707A7.001 7.001 0 0 1 12 5a7 7 0 0 1 7 7h2a9 9 0 0 0-9-9 9 9 0 0 0-6.364 15.364l-.707.707a1 1 0 0 1-1.414 0z"/>
+            </svg>
+            <span class="control-label">New Word</span>
+        </div>
+    </div>
+
+
+    <h1 id="main-title">Enter a word to build its Radar</h1>
+    <div id="chart-container">
+        <div id="input-container">
+            <form id="word-form">
+                <input type="text" id="word-input" placeholder="e.g., see" autocomplete="off">
+            </form>
+            <div id="pos-selector">
+                <div class="pos-option" data-pos="verb">Verb</div>
+                <div class="pos-option" data-pos="noun">Noun</div>
+                <div class="pos-option" data-pos="adjective">Adjective</div>
+            </div>
+            <textarea id="custom-words-input" placeholder="Custom Words: Paste comma-separated words to classify instead of using the thesaurus."></textarea>
+            <button id="submit-btn" class="hidden">Start</button>
+        </div>
+        <div id="sense-selector" class="hidden">
+            <h3 id="sense-title">Which meaning of "word"?</h3>
+            <div id="sense-options"></div>
+        </div>
+        <div id="radar-scanner" class="hidden"></div>
+        <div id="legend" class="hidden">
+            <h4>Legend</h4>
+            <div style="margin-bottom: 10px;">
+                <strong>Bubble Color:</strong>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #4CAF50;"></div>Beginner</div>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #FF9800;"></div>Intermediate</div>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #F44336;"></div>Advanced</div>
+            </div>
+            <div style="padding-top: 6px; border-top: 1px solid #555;">
+                <strong>Bubble Size:</strong>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 8px; height: 8px; background-color: #666;"></div>Rare</div>
+                <div class="legend-size-demo"><div class="size-circle" style="width: 16px; height: 16px; background-color: #666;"></div>Common</div>
+            </div>
+        </div>
+        <div class="tooltip"></div>
+    </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
