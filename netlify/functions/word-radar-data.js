@@ -4,6 +4,7 @@ const fetch = require('node-fetch');
 const { getStore } = require('@netlify/blobs');
 const { createHash } = require('crypto');
 
+// ... (generateCacheKey, getLLMPrompt, getAntonymSpectrumPrompt, getSingleWordDataPrompt, etc. are unchanged) ...
 function generateCacheKey(object, prompt) {
     const ordered = Object.keys(object)
         .sort()
@@ -100,7 +101,6 @@ Return ONLY valid JSON.`;
     return { systemPrompt, userPrompt };
 }
 
-// NEW: Prompt for fetching a single word's data in the context of a spectrum
 function getSingleWordDataPrompt(wordToAdd, startWord, endWord) {
     const systemPrompt = `You are a linguist adding a word to an existing word spectrum (cline). You will be given a word to add, plus the start and end words of the spectrum for context.
 
@@ -145,10 +145,14 @@ function processSensesWithClustering( allRawSenses, primarySenseCount = 3, maxTo
 }
 
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
-    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY; if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.'); const modelsToTry = [ "mistralai/mistral-7b-instruct:free", "openai/gpt-3.5-turbo-1106", "google/gemini-flash-1.5" ]; for (const model of modelsToTry) { console.log(`Attempting API call with model: ${model}`); try { const response = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] }) }); if (!response.ok) { const errorBody = await response.text(); console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`); continue; } const data = await response.json(); if (data.choices && data.choices[0] && data.choices[0].message?.content) { console.log(`Successfully received response from: ${model}`); try { return JSON.parse(data.choices[0].message.content); } catch (parseError) { console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`); continue; } } else { console.warn(`Model '${model}' returned no choices. Trying next model.`); } } catch (error) { console.error(`An unexpected network error occurred with model '${model}':`, error); } } throw new Error("All AI models failed to provide a valid response. Please try again later.");
+    const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY; if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.'); 
+    // --- CHANGE IS HERE ---
+    // Swapped to a list of newer, faster, and more reliable free models to avoid timeouts.
+    const modelsToTry = [ "mistralai/mistral-small-3.2-24b-instruct:free", "openai/gpt-oss-120b:free", "google/gemini-flash-1.5-8b" ]; 
+    // --- END OF CHANGE ---
+    for (const model of modelsToTry) { console.log(`Attempting API call with model: ${model}`); try { const response = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] }) }); if (!response.ok) { const errorBody = await response.text(); console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`); continue; } const data = await response.json(); if (data.choices && data.choices[0] && data.choices[0].message?.content) { console.log(`Successfully received response from: ${model}`); try { return JSON.parse(data.choices[0].message.content); } catch (parseError) { console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`); continue; } } else { console.warn(`Model '${model}' returned no choices. Trying next model.`); } } catch (error) { console.error(`An unexpected network error occurred with model '${model}':`, error); } } throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
-// MODIFIED: This function can now handle 'singleWord' type
 async function getCachedLlmResponse(payload, store, type = 'radar') {
     let systemPrompt, userPrompt, cacheKeyPayload;
     if (type === 'spectrum') {
@@ -173,6 +177,7 @@ async function getCachedLlmResponse(payload, store, type = 'radar') {
     return apiResponse;
 }
 
+// ... (The rest of the 'handler' function is unchanged) ...
 exports.handler = async (event, context) => {
     const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
     if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
@@ -185,7 +190,6 @@ exports.handler = async (event, context) => {
         let store;
         try { store = getStore("word-radar-cache"); } catch (storeError) { console.warn('Failed to initialize blob store:', storeError.message); store = null; }
 
-        // NEW: Handle request to add a single word to a spectrum
         if (wordToAdd && start_word && end_word) {
             console.log(`Fetching data for single word "${wordToAdd}" in spectrum "${start_word}" -> "${end_word}"`);
             const apiResponse = store ?
@@ -241,6 +245,7 @@ exports.handler = async (event, context) => {
 
         console.log(`Multiple consolidated senses found for "${word}" (${processedSenses.senses.length} primary, ${processedSenses.additionalSenses?.length || 0} additional), returning for user selection.`);
         return { statusCode: 200, headers, body: JSON.stringify({ senses: processedSenses.senses, additionalSenses: processedSenses.additionalSenses, hasMore: processedSenses.hasMore }) };
+
 
     } catch (error) {
         console.error("Function Error:", error);
