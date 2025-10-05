@@ -297,6 +297,7 @@
             gap: 15px;
             padding-top: clamp(10px, 2vh, 20px);
             pointer-events: none;
+            z-index: 10; /* Add this line to ensure the header stays on top of the SVG content */
         }
 
         @media (max-width: 768px) { #chart-container { width: calc(100vw - 10px); height: calc(100vh - 60px); } h1 { font-size: clamp(1rem, 5vw, 1.5rem); margin: 0; } }
@@ -538,9 +539,11 @@
         const height = containerRect.height;
         
         const isMobile = window.innerWidth <= 768;
-        const headerOffset = isMobile ? 30 : 50; // <-- CHANGE 1: ADD THIS LINE
+        // CHANGE 1: Define an offset for the header to correctly calculate the chart's vertical space.
+        const headerOffset = isMobile ? 30 : 50; 
         const margin = isMobile ? 65 : 100;
-        const maxRadius = (Math.min(width, height - headerOffset) / 2) - margin; // <-- CHANGE 2: MODIFY THIS LINE
+        // CHANGE 2: Adjust maxRadius to use the height available *below* the header.
+        const maxRadius = (Math.min(width, height - headerOffset) / 2) - margin; 
         
         const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
             .on("click", (event) => {
@@ -548,7 +551,8 @@
                 else if (currentView !== 'radar') { event.stopPropagation(); switchToRadarView(); }
             });
 
-        const chartGroup = svg.append("g").attr("transform", `translate(${width / 2}, ${height / 2 + headerOffset / 2})`); // <-- CHANGE 3: MODIFY THIS LINE
+        // CHANGE 3: Shift the chart's center down to align it within the space below the header.
+        const chartGroup = svg.append("g").attr("transform", `translate(${width / 2}, ${height / 2 + headerOffset / 2})`); 
 
         let currentView = 'radar', activeSpectrum = null, currentBubbles = null, currentAntonymBubbles = null, spectrumBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null, currentSpectrumData = null;
 
