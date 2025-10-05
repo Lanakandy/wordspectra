@@ -186,8 +186,19 @@ exports.handler = async (event, context) => {
         let store;
         try { store = getStore("word-radar-cache"); } catch (storeError) { console.warn('Failed to initialize blob store:', storeError.message); store = null; }
 
-        // --- FIX: CONSOLIDATED SPECTRUM LOGIC ---
-        // This block now handles both direct spectrum requests AND antonym clicks from the radar.
+        // FIX: This block for adding a single word MUST come first, as its payload is more specific.
+        if (wordToAdd && start_word && end_word) {
+            console.log(`Fetching data for single word "${wordToAdd}" in spectrum "${start_word}" -> "${end_word}"`);
+            const apiResponse = store ?
+                await getCachedLlmResponse({ wordToAdd, start_word, end_word }, store, 'singleWord') :
+                await (async () => {
+                    const { systemPrompt, userPrompt } = getSingleWordDataPrompt(wordToAdd, start_word, end_word);
+                    return await callOpenRouterWithFallback(systemPrompt, userPrompt);
+                })();
+            return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
+        }
+
+        // This block now correctly handles only new spectrum requests.
         if ((start_word && end_word) || (word && antonym)) {
             const sWord = start_word || word;
             const eWord = end_word || antonym;
@@ -200,38 +211,23 @@ exports.handler = async (event, context) => {
                     return await callOpenRouterWithFallback(systemPrompt, userPrompt);
                 })();
             
-            // Ensure the response object has the correct start/end words for the frontend
             apiResponse.start_word = sWord;
             apiResponse.end_word = eWord;
             
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
-
-        // Logic for adding a single word to an existing spectrum
-        if (wordToAdd && start_word && end_word) {
-            console.log(`Fetching data for single word "${wordToAdd}" in spectrum "${start_word}" -> "${end_word}"`);
-            const apiResponse = store ?
-                await getCachedLlmResponse({ wordToAdd, start_word, end_word }, store, 'singleWord') :
-                await (async () => {
-                    const { systemPrompt, userPrompt } = getSingleWordDataPrompt(wordToAdd, start_word, end_word);
-                    return await callOpenRouterWithFallback(systemPrompt, userPrompt);
-                })();
-            return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
-        }
         
-        // --- RADAR VIEW LOGIC (Now only runs if spectrum logic didn't) ---
+        // --- RADAR VIEW LOGIC (Unchanged) ---
         if (!word || !partOfSpeech) {
             return { statusCode: 400, headers, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         }
         
-        // Logic for generating a radar from a specific set of synonyms
         if (synonyms && synonyms.length > 0) {
             const apiResponse = store ? await getCachedLlmResponse({ word, partOfSpeech, synonyms }, store, 'radar') : await (async () => { const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, synonyms); return await callOpenRouterWithFallback(systemPrompt, userPrompt); })();
             apiResponse.hub_word = word; apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
-        // Logic for discovering senses for a radar word
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
         if (!MW_API_KEY) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Merriam-Webster API key is not configured.' }) };
 
