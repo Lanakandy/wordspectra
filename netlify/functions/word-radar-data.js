@@ -60,7 +60,7 @@ function getAntonymSpectrumPrompt(startWord, endWord) {
     const systemPrompt = `You are a linguist creating a dataset for a word spectrum (cline) visualization. You will be given two words that represent opposite ends of a semantic spectrum.
 
 REQUIREMENTS:
-1. **GENERATE SPECTRUM:** Generate 8-12 intermediate words that form a smooth semantic gradient between the start_word and end_word. Words should progress gradually with no sudden jumps in meaning.
+1. **GENERATE SPECTRUM:** Generate 10-15 intermediate words that form a smooth semantic gradient between the start_word and end_word. Words should progress gradually with no sudden jumps in meaning.
 2.  **INCLUDE ENDPOINTS:** The final list of words MUST begin with the \`start_word\` and end with the \`end_word\`.
 3.  **PROVIDE DATA:** For EACH word in the full list (including start and end), provide the following data points:
     *   **term**: The word itself.
@@ -174,7 +174,6 @@ async function getCachedLlmResponse(payload, store, type = 'radar') {
     return apiResponse;
 }
 
-// ... (The rest of the 'handler' function is unchanged) ...
 exports.handler = async (event, context) => {
     const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
     if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
@@ -187,6 +186,28 @@ exports.handler = async (event, context) => {
         let store;
         try { store = getStore("word-radar-cache"); } catch (storeError) { console.warn('Failed to initialize blob store:', storeError.message); store = null; }
 
+        // --- FIX: CONSOLIDATED SPECTRUM LOGIC ---
+        // This block now handles both direct spectrum requests AND antonym clicks from the radar.
+        if ((start_word && end_word) || (word && antonym)) {
+            const sWord = start_word || word;
+            const eWord = end_word || antonym;
+
+            console.log(`Generating spectrum for "${sWord}" vs "${eWord}"`);
+            const apiResponse = store ?
+                await getCachedLlmResponse({ word: sWord, antonym: eWord }, store, 'spectrum') :
+                await (async () => {
+                    const { systemPrompt, userPrompt } = getAntonymSpectrumPrompt(sWord, eWord);
+                    return await callOpenRouterWithFallback(systemPrompt, userPrompt);
+                })();
+            
+            // Ensure the response object has the correct start/end words for the frontend
+            apiResponse.start_word = sWord;
+            apiResponse.end_word = eWord;
+            
+            return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
+        }
+
+        // Logic for adding a single word to an existing spectrum
         if (wordToAdd && start_word && end_word) {
             console.log(`Fetching data for single word "${wordToAdd}" in spectrum "${start_word}" -> "${end_word}"`);
             const apiResponse = store ?
@@ -197,26 +218,20 @@ exports.handler = async (event, context) => {
                 })();
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
-
-        if (word && antonym) {
-            console.log(`Generating antonym spectrum for "${word}" vs "${antonym}"`);
-            const apiResponse = store ?
-                await getCachedLlmResponse({ word, antonym }, store, 'spectrum') :
-                await (async () => {
-                    const { systemPrompt, userPrompt } = getAntonymSpectrumPrompt(word, antonym);
-                    return await callOpenRouterWithFallback(systemPrompt, userPrompt);
-                })();
-            return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
+        
+        // --- RADAR VIEW LOGIC (Now only runs if spectrum logic didn't) ---
+        if (!word || !partOfSpeech) {
+            return { statusCode: 400, headers, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
         }
         
-        if (!word || !partOfSpeech) return { statusCode: 400, headers, body: JSON.stringify({ error: "Word and Part of Speech are required." }) };
-        
+        // Logic for generating a radar from a specific set of synonyms
         if (synonyms && synonyms.length > 0) {
             const apiResponse = store ? await getCachedLlmResponse({ word, partOfSpeech, synonyms }, store, 'radar') : await (async () => { const { systemPrompt, userPrompt } = getLLMPrompt(word, partOfSpeech, synonyms); return await callOpenRouterWithFallback(systemPrompt, userPrompt); })();
             apiResponse.hub_word = word; apiResponse.part_of_speech = partOfSpeech;
             return { statusCode: 200, headers, body: JSON.stringify(apiResponse) };
         }
 
+        // Logic for discovering senses for a radar word
         const MW_API_KEY = process.env.MW_THESAURUS_API_KEY;
         if (!MW_API_KEY) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Merriam-Webster API key is not configured.' }) };
 
@@ -242,7 +257,6 @@ exports.handler = async (event, context) => {
 
         console.log(`Multiple consolidated senses found for "${word}" (${processedSenses.senses.length} primary, ${processedSenses.additionalSenses?.length || 0} additional), returning for user selection.`);
         return { statusCode: 200, headers, body: JSON.stringify({ senses: processedSenses.senses, additionalSenses: processedSenses.additionalSenses, hasMore: processedSenses.hasMore }) };
-
 
     } catch (error) {
         console.error("Function Error:", error);
