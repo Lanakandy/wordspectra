@@ -17,36 +17,32 @@ function generateCacheKey(object, prompt) {
 }
 
 function getLLMPrompt(word, partOfSpeech, synonyms) {
-    const systemPrompt = `You are a linguist creating a Word Radar visualization dataset for language learners. You will be given a hub word, a part of speech, and a list of related words.
+    const systemPrompt = `You are a linguist creating a Word Radar dataset for language learners, based on the CEFR framework.
 
 REQUIREMENTS:
-1.  **FILTER SYNONYMS:** From the provided "Synonyms" list, select ONLY the words and phrasal verbs that function as a **${partOfSpeech}**. Discard any that do not fit this grammatical role.
-2.  **GENERATE ANTONYMS:** Provide a list of 3-5 distinct antonyms (opposites) for the hub word in its role as a ${partOfSpeech}.
-3.  **CLASSIFY FILTERED SYNONYMS:** For each word from your filtered list, generate the required data points.
-    *   **formality:** Score from -1.0 (very informal, slang) to 1.0 (very formal, academic). 0.0 is neutral.
-    *   **style:** Score from -1.0 (literal, denotative) to 1.0 (figurative, expressive, connotative). 0.0 is neutral.
-    *   **ring:** A categorical distance from the hub word's core meaning (0: Core, 1: Common, 2: Specific, 3: Nuanced).
-    *   **frequency:** A score from 0 (very rare) to 100 (very common).
+1.  **FILTER SYNONYMS:** From the provided "Synonyms" list, select ONLY words that function as a **${partOfSpeech}**.
+2.  **GENERATE ANTONYMS:** Provide 3-5 distinct antonyms for the hub word.
+3.  **CLASSIFY FILTERED SYNONYMS:** For each filtered word, generate the required data points:
+    *   **formality:** Score from -1.0 (very informal) to 1.0 (very formal).
+    *   **style:** Score from -1.0 (literal) to 1.0 (figurative).
+    *   **ring:** Categorical distance from the core meaning (0: Core, 1: Common, 2: Specific, 3: Nuanced).
+    *   **frequency:** Score from 0 (very rare) to 100 (very common).
     *   **definition:** A brief, clear definition.
     *   **example:** A natural usage example.
-    *   **difficulty:** 'beginner', 'intermediate', or 'advanced'.
+    *   **difficulty**: 'beginner', 'intermediate', or 'advanced'. **Crucially, this MUST be based on the CEFR framework, not just frequency.**
+        - **beginner (A1-A2):** Core vocabulary for simple, everyday situations. (e.g., happy, big, good, walk)
+        - **intermediate (B1-B2):** More descriptive, nuanced words for expressing opinions or discussing topics. (e.g., anxious, optimistic, confident, concerned)
+        - **advanced (C1-C2):** Sophisticated, formal, or specialized words for academic or professional contexts. (e.g., apprehensive, ebullient, meticulous)
 
 JSON Structure:
 {
   "hub_word": "original word",
   "part_of_speech": "provided part of speech",
   "rings": ["Core", "Common", "Specific", "Nuanced"],
-  "antonyms": ["opposite1", "opposite2", "opposite3"],
+  "antonyms": ["opposite1", "opposite2"],
   "words": [
     {
-      "term": "synonym_from_filtered_list",
-      "ring": 1,
-      "frequency": 75,
-      "formality": -0.3,
-      "style": 0.8,
-      "definition": "Brief, clear definition for this specific synonym.",
-      "example": "Natural usage example for the synonym.",
-      "difficulty": "intermediate"
+      "term": "synonym_from_filtered_list", "ring": 1, "frequency": 75, "formality": -0.3, "style": 0.8, "definition": "...", "example": "...", "difficulty": "intermediate"
     }
   ]
 }`;
@@ -57,26 +53,22 @@ JSON Structure:
 }
 
 function getAntonymSpectrumPrompt(startWord, endWord) {
-    const systemPrompt = `You are a linguist creating a dataset for a word spectrum (cline) visualization. You will be given two words that represent opposite ends of a semantic spectrum.
+    const systemPrompt = `You are a linguist creating a dataset for a word spectrum (cline) visualization based on the CEFR framework for language learners.
 
 REQUIREMENTS:
-1. **GENERATE SPECTRUM:** Generate 10-15 intermediate words that form a smooth semantic gradient between the start_word and end_word. Words should progress gradually with no sudden jumps in meaning.
-2.  **INCLUDE ENDPOINTS:** The final list of words MUST begin with the \`start_word\` and end with the \`end_word\`.
-3.  **PROVIDE DATA:** For EACH word in the full list (including start and end), provide the following data points:
+1.  **GENERATE SPECTRUM:** Generate 8-12 intermediate words that form a smooth semantic gradient between the start_word and end_word.
+2.  **INCLUDE ENDPOINTS:** The final list MUST begin with the \`start_word\` and end with the \`end_word\`.
+3.  **PROVIDE DATA:** For EACH word, provide the following data points:
     *   **term**: The word itself.
-    *   **spectrum_position**: A score from -1.0 (start_word) to 1.0 (end_word). 
-        - Distribute positions to reflect semantic distance, not just equal intervals
-        - Words closer in meaning should have closer position scores
-        - The start_word is always -1.0, the end_word is always 1.0
-    *   **formality**: Score from -1.0 (slang/colloquial, e.g., "yummy") through 0.0 (neutral, e.g., "good") to 1.0 (formal/technical, e.g., "efficacious").
+    *   **spectrum_position**: A score from -1.0 (start_word) to 1.0 (end_word), distributed to reflect semantic distance.
+    *   **formality**: Score from -1.0 (informal) to 1.0 (formal).
     *   **definition**: A brief, clear definition.
     *   **example**: A natural usage example.
-    *   **frequency**: Score from 0-100 based on everyday usage:
-        - 80-100: Very common (e.g., "good", "bad", "happy")
-        - 50-79: Common (e.g., "adequate", "pleasant")
-        - 20-49: Uncommon (e.g., "felicitous", "mediocre")
-        - 0-19: Rare (e.g., "pusillanimous", "ebullient")
-    *   **difficulty**: 'beginner', 'intermediate', or 'advanced'.
+    *   **frequency**: Score from 0 (rare) to 100 (very common).
+    *   **difficulty**: 'beginner', 'intermediate', or 'advanced'. **Crucially, this MUST be based on the CEFR framework, not just frequency.**
+        - **beginner (A1-A2):** Core vocabulary for simple, everyday situations. (e.g., happy, big, good, walk)
+        - **intermediate (B1-B2):** More descriptive, nuanced words for expressing opinions or discussing topics. (e.g., anxious, optimistic, confident, concerned)
+        - **advanced (C1-C2):** Sophisticated, formal, or specialized words for academic or professional contexts. (e.g., apprehensive, ebullient, meticulous)
 
 JSON Structure:
 {
@@ -84,13 +76,11 @@ JSON Structure:
   "end_word": "The original end word",
   "words": [
     {
-      "term": "start_word",
-      "spectrum_position": -1.0, "formality": 0.2, "definition": "...", "example": "...", "frequency": 60, "difficulty": "intermediate"
+      "term": "start_word", "spectrum_position": -1.0, "formality": 0.2, "definition": "...", "example": "...", "frequency": 60, "difficulty": "intermediate"
     },
     // ... more intermediate words ...
     {
-      "term": "end_word",
-      "spectrum_position": 1.0, "formality": -0.1, "definition": "...", "example": "...", "frequency": 65, "difficulty": "intermediate"
+      "term": "end_word", "spectrum_position": 1.0, "formality": -0.1, "definition": "...", "example": "...", "frequency": 65, "difficulty": "intermediate"
     }
   ]
 }
@@ -113,7 +103,10 @@ REQUIREMENTS:
     *   **definition**: A brief, clear definition.
     *   **example**: A natural usage example.
     *   **frequency**: A score from 0 (very rare) to 100 (very common).
-    *   **difficulty**: 'beginner', 'intermediate', or 'advanced'.
+    *   **difficulty**: 'beginner', 'intermediate', or 'advanced'. **Crucially, this MUST be based on the CEFR framework, not just frequency.**
+        - **beginner (A1-A2):** Core vocabulary for simple, everyday situations. (e.g., happy, big, good, walk)
+        - **intermediate (B1-B2):** More descriptive, nuanced words for expressing opinions or discussing topics. (e.g., anxious, optimistic, confident, concerned)
+        - **advanced (C1-C2):** Sophisticated, formal, or specialized words for academic or professional contexts. (e.g., apprehensive, ebullient, meticulous)
 
 JSON Structure (Return only a single JSON object for the word, not an array):
 {
