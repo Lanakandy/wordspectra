@@ -32,6 +32,61 @@
             align-items: center;
             gap: 15px; /* Spacing between inputs */
         }
+#view-mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .view-option {
+            background: rgba(40, 40, 60, 0.9);
+            border: 1px solid #9a9ac8;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: clamp(12px, 3vw, 14px);
+            font-weight: 600;
+            color: #c0c0e0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .view-option:hover {
+            border-color: #FF6B47;
+            color: #FF6B47;
+        }
+        .view-option.selected {
+            background-color: #9a9ac8;
+            color: #1a1a2e;
+            transform: scale(1.05);
+        }
+
+        /* Styles for the new Spectrum input fields */
+        #spectrum-inputs-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            width: clamp(250px, 70vw, 340px);
+        }
+        .spectrum-input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #9a9ac8;
+            border-radius: 8px;
+            color: white;
+            font-size: clamp(14px, 4vw, 18px);
+            font-weight: bold;
+            text-align: center;
+            padding: 8px 10px;
+            width: 100%;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        .spectrum-input:focus {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+        #spectrum-vs {
+            font-weight: bold;
+            color: #9a9ac8;
+            font-size: 14px;
+        }
 
         #word-input { 
             background: rgba(255, 255, 255, 0.1); 
@@ -479,17 +534,35 @@
         </div>
         
         <div id="input-container">
-            <form id="word-form">
-                <input type="text" id="word-input" placeholder="e.g., see" autocomplete="off">
-            </form>
-            <div id="pos-selector">
-                <div class="pos-option" data-pos="verb">Verb</div>
-                <div class="pos-option" data-pos="noun">Noun</div>
-                <div class="pos-option" data-pos="adjective">Adjective</div>
-                <div class="pos-option" data-pos="adverb">Adverb</div>
+            <!-- 1. VIEW MODE SWITCH -->
+            <div id="view-mode-selector">
+                <div class="view-option selected" data-view="radar">Radar View</div>
+                <div class="view-option" data-view="spectrum">Spectrum View</div>
             </div>
-            <textarea id="custom-words-input" placeholder="Custom Words: Paste comma-separated words to classify instead of using the thesaurus."></textarea>
-            <button id="submit-btn" class="hidden">Start</button>
+
+            <!-- 2. RADAR-SPECIFIC INPUTS -->
+            <div id="radar-input-container">
+                <form id="word-form">
+                    <input type="text" id="word-input" placeholder="e.g., friendly" autocomplete="off">
+                </form>
+                <div id="pos-selector">
+                    <div class="pos-option" data-pos="verb">Verb</div>
+                    <div class="pos-option" data-pos="noun">Noun</div>
+                    <div class="pos-option" data-pos="adjective">Adjective</div>
+                    <div class="pos-option" data-pos="adverb">Adverb</div>
+                </div>
+            </div>
+
+            <!-- 3. SPECTRUM-SPECIFIC INPUTS (Initially hidden) -->
+            <div id="spectrum-inputs-container" class="hidden">
+                 <input type="text" class="spectrum-input" id="start-word-input" placeholder="e.g., huge">
+                 <span id="spectrum-vs">vs</span>
+                 <input type="text" class="spectrum-input" id="end-word-input" placeholder="e.g., tiny">
+            </div>
+
+            <!-- 4. SHARED INPUTS -->
+            <textarea id="custom-words-input" placeholder="Optional: Add your own comma-separated words to place on the chart."></textarea>
+            <button id="submit-btn" class="hidden">Build Radar</button>
         </div>
         <div id="sense-selector" class="hidden">
             <h3 id="sense-title">Which meaning of "word"?</h3>
@@ -520,6 +593,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // --- Grouped D3 Selections ---
         const mainTitle = d3.select("#main-title");
         const inputContainer = d3.select("#input-container");
         const wordForm = d3.select("#word-form");
@@ -532,40 +606,38 @@
         const addWordContainer = d3.select("#add-word-container");
         const addWordInput = d3.select("#add-word-input");
         const addWordBtn = d3.select("#add-word-btn");
-        
+        const submitBtn = d3.select("#submit-btn");
         const container = d3.select("#chart-container");
+        
+        // --- Grouped State Variables ---
+        let currentViewMode = 'radar';
+        let currentSearch = { word: '', partOfSpeech: '' };
+        let currentView = 'radar', activeSpectrum = null, currentBubbles = null, currentAntonymBubbles = null, spectrumBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null, currentSpectrumData = null;
+
+        // --- Chart Dimensions ---
         const containerRect = container.node().getBoundingClientRect();
         const width = containerRect.width;
         const height = containerRect.height;
-        
         const isMobile = window.innerWidth <= 768;
         const headerOffset = isMobile ? 30 : 50; 
         const margin = isMobile ? 65 : 100;
         const maxRadius = (Math.min(width, height - headerOffset) / 2) - margin; 
         
-        // Dynamically position the scanner to match the new chart center and radius.
         const chartCenterY = height / 2 + headerOffset / 2;
-        scanner.style('top', `${chartCenterY - maxRadius}px`)
-               .style('height', `${maxRadius}px`);
+        scanner.style('top', `${chartCenterY - maxRadius}px`).style('height', `${maxRadius}px`);
 
+        // --- SVG and D3 Scales Setup ---
         const svg = container.append("svg").attr("width", width).attr("height", height).attr("viewBox", `0 0 ${width} ${height}`).attr("preserveAspectRatio", "xMidYMid meet")
             .on("click", (event) => {
                 if (selectedWords.length > 0) { clearComparison(); } 
                 else if (currentView !== 'radar') { event.stopPropagation(); switchToRadarView(); }
             });
 
-        const chartGroup = svg.append("g").attr("transform", `translate(${width / 2}, ${height / 2 + headerOffset / 2})`); 
-
-        let currentView = 'radar', activeSpectrum = null, currentBubbles = null, currentAntonymBubbles = null, spectrumBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null, currentSpectrumData = null;
-
+        const chartGroup = svg.append("g").attr("transform", `translate(${width / 2}, ${chartCenterY})`); 
+        
         const bubbleSizeScale = d3.scaleSqrt().domain([0, 100]).range(isMobile ? [5, 20] : [8, 30]);
         const largestBubbleRadius = bubbleSizeScale.range()[1]; 
-
-        const difficultyColors = {
-            beginner: '#4CAF50',
-            intermediate: '#FF9800',
-            advanced: '#F44336'
-        };
+        const difficultyColors = { beginner: '#4CAF50', intermediate: '#FF9800', advanced: '#F44336' };
         
         const radarXScale = d3.scaleLinear().domain([-1.1, 1.1]).range([-maxRadius + largestBubbleRadius, maxRadius - largestBubbleRadius]);
         const radarYScale = d3.scaleLinear().domain([-1.1, 1.1]).range([maxRadius - largestBubbleRadius, -maxRadius + largestBubbleRadius]);
@@ -581,49 +653,71 @@
         const antonymsGroup = chartGroup.append("g").attr("class", "antonyms-container");
         const labelsGroup = chartGroup.append("g").attr("class", "labels-container");
         
-        const submitBtn = d3.select("#submit-btn");
-        let currentSearch = { word: '', partOfSpeech: '' };
-        
         function updateSubmitButtonState() {
-            const word = d3.select("#word-input").property("value").trim();
-            const posSelected = d3.select(".pos-option.selected").node();
-            if (word && posSelected) {
-                submitBtn.classed("hidden", false);
-            } else {
-                submitBtn.classed("hidden", true);
+            let isReady = false;
+            if (currentViewMode === 'radar') {
+                const word = d3.select("#word-input").property("value").trim();
+                const posSelected = d3.select(".pos-option.selected").node();
+                isReady = word && posSelected;
+            } else { // Spectrum mode
+                const startWord = d3.select("#start-word-input").property("value").trim();
+                const endWord = d3.select("#end-word-input").property("value").trim();
+                isReady = startWord && endWord;
             }
+            submitBtn.classed("hidden", !isReady);
         }
 
-      let inputDebounceTimer;
-      d3.select('#word-input').on('input', function() {
-          clearTimeout(inputDebounceTimer);
-          inputDebounceTimer = setTimeout(() => {
-            updateSubmitButtonState();
-        }, 150);
-      });
+        let inputDebounceTimer;
+        d3.selectAll('#word-input, .spectrum-input').on('input', function() {
+            clearTimeout(inputDebounceTimer);
+            inputDebounceTimer = setTimeout(() => {
+                updateSubmitButtonState();
+            }, 150);
+        });
 
         async function handleFormSubmit(event) {
             event.preventDefault();
-            currentSearch.word = d3.select("#word-input").property("value").trim();
-            const selectedPosNode = d3.select(".pos-option.selected").node();
-            const customWords = d3.select("#custom-words-input").property("value").trim();
-            if (!currentSearch.word) { alert("Please enter a word."); return; }
-            if (!selectedPosNode) { alert("Please select a part of speech."); return; }
-            currentSearch.partOfSpeech = selectedPosNode.dataset.pos;
-            if (currentView !== 'radar') { await switchToRadarView(); }
             inputContainer.classed("hidden", true);
             legend.classed("hidden", true);
             clearChart();
-            if (customWords) {
-                const synonyms = customWords.split(',').map(s => s.trim()).filter(Boolean);
-                if (synonyms.length > 0) {
-                    handleSenseSelection(synonyms);
-                    return;
-                }
-            }
-            mainTitle.style("cursor", "default").text(`Discovering meanings for "${currentSearch.word}"...`);
             scanner.classed("hidden", false);
+            const customWords = d3.select("#custom-words-input").property("value").trim().split(',').map(s => s.trim()).filter(Boolean);
+
+            if (currentViewMode === 'spectrum') {
+                const startWord = d3.select("#start-word-input").property("value").trim();
+                const endWord = d3.select("#end-word-input").property("value").trim();
+                mainTitle.text(`Generating spectrum for "${startWord}" vs "${endWord}"...`);
+                
+                const payload = { start_word: startWord, end_word: endWord };
+                if (customWords.length > 0) payload.synonyms = customWords;
+
+                const spectrumData = await fetchWordData(payload);
+                scanner.classed("hidden", true);
+                
+                if (spectrumData && spectrumData.words) {
+                    drawSpectrumView(); // Set up the axes and labels first
+                    switchToSpectrumView('spectrum', spectrumData); // Then transition and draw bubbles
+                    restartBtn.classed("hidden", false);
+                    exportBtn.classed("hidden", false);
+                } else {
+                    mainTitle.text(spectrumData.error || `Could not generate spectrum. Click to try again.`);
+                    restartBtn.classed("hidden", false);
+                }
+                return;
+            }
+            
+            currentSearch.word = d3.select("#word-input").property("value").trim();
+            const selectedPosNode = d3.select(".pos-option.selected").node();
+            currentSearch.partOfSpeech = selectedPosNode.dataset.pos;
+            
+            if (customWords.length > 0) {
+                handleSenseSelection(customWords);
+                return;
+            }
+            
+            mainTitle.style("cursor", "default").text(`Discovering meanings for "${currentSearch.word}"...`);
             const discoveryData = await fetchWordData({ word: currentSearch.word, partOfSpeech: currentSearch.partOfSpeech });
+            
             if (discoveryData && discoveryData.senses) {
                 scanner.classed("hidden", true);
                 mainTitle.text("Please select a meaning to explore");
@@ -650,20 +744,10 @@
                     additionalOptions.enter().append("button").attr("class", "sense-option-btn additional-sense").style("opacity", "0.8").style("font-size", "clamp(13px, 3vw, 15px)").text(d => `"${d.synonyms.slice(0, 2).join('", "')}" ${d.synonyms.length > 2 ? `(+${d.synonyms.length - 2})` : ''} — ${d.definition}`).on("click", (e, d) => handleSenseSelection(d.synonyms));
                 }
                 senseSelector.classed("hidden", false);
-            } else if (discoveryData && discoveryData.words) {
-                currentRadarData = discoveryData;
-                scanner.classed("hidden", true);
-                mainTitle.text(`Word Radar: "${discoveryData.hub_word}"`).style("cursor", "pointer");
-                updateLegend(discoveryData);
-                drawRadarBackground();
-                drawWordBubbles(discoveryData);
-                legend.classed("hidden", false);
-                restartBtn.classed("hidden", false);
-                exportBtn.classed("hidden", false);
             } else {
-                scanner.classed("hidden", true);
-                mainTitle.text(discoveryData.error || `No data for "${currentSearch.word}". Click to try again.`).style("cursor", "pointer");
-                restartBtn.classed("hidden", false);
+                 scanner.classed("hidden", true);
+                 mainTitle.text(discoveryData.error || `No data for "${currentSearch.word}". Click to try again.`).style("cursor", "pointer");
+                 restartBtn.classed("hidden", false);
             }
         }
 
@@ -687,6 +771,8 @@
                 restartBtn.classed("hidden", false);
             }
         }
+        
+        // ... (The rest of your functions: getMetadataHTML, handleWordClick, clearComparison, etc. remain the same) ...
 
         function getMetadataHTML(d) {
             const difficultyHTML = d.difficulty ? `<span class="difficulty ${d.difficulty.toLowerCase()}">${d.difficulty}</span>` : '';
@@ -789,7 +875,6 @@
         }
 
         async function exportAsPNG() {
-            // Helper function to convert image URL to a Data URL to bypass CORS issues
             const toDataURL = url => fetch(url)
                 .then(response => response.blob())
                 .then(blob => new Promise((resolve, reject) => {
@@ -804,19 +889,13 @@
             let dataUrl;
 
             try {
-                // Fetch and convert the logo to a Data URL
                 dataUrl = await toDataURL(originalUrl);
-                // Temporarily replace the logo's src with the Data URL
                 logo.attr("src", dataUrl);
-
                 d3.select("#add-word-container").style("display", "none");
                 const exportArea = d3.select("#chart-container").node();
                 
                 const canvas = await html2canvas(exportArea, {
-                    backgroundColor: '#1a1a2e',
-                    scale: 2,
-                    logging: false,
-                    useCORS: true // Keep this, it helps with other potential assets
+                    backgroundColor: '#1a1a2e', scale: 2, logging: false, useCORS: true
                 });
 
                 d3.select("#add-word-container").style("display", "flex");
@@ -836,13 +915,11 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-
             } catch (err) {
                 d3.select("#add-word-container").style("display", "flex");
                 console.error("html2canvas failed:", err);
                 alert("Sorry, there was an error exporting the image.");
             } finally {
-                // IMPORTANT: Change the src back to the original URL after exporting
                 if (originalUrl) {
                     logo.attr("src", originalUrl);
                 }
@@ -887,13 +964,13 @@
             if (!scanner.classed("hidden")) return;
             switchToRadarView().then(() => {
                 clearChart();
-                mainTitle.text("Enter a word to build its Radar").style("cursor", "default");
+                mainTitle.text("Enter a word to build its Radar");
                 inputContainer.classed("hidden", false);
                 senseSelector.classed("hidden", true);
                 legend.classed("hidden", true);
                 restartBtn.classed("hidden", true);
                 exportBtn.classed("hidden", true);
-                d3.select("#word-input").property("value", "").node().focus();
+                d3.select("#word-input").property("value", "");
                 d3.select("#custom-words-input").property("value", "");
                 d3.selectAll('.pos-option').classed('selected', false);
                 d3.select("#submit-btn").classed("hidden", true);
@@ -942,14 +1019,6 @@
             addWordBtn.attr("disabled", null).text("Add");
         }
 
-        addWordBtn.on("click", handleAddWord);
-        addWordInput.on("keydown", (event) => {
-            if (event.key === "Enter") {
-                event.preventDefault();
-                handleAddWord();
-            }
-        });
-
         function updateSpectrumView(nodes) {
             const simulation = d3.forceSimulation(nodes)
                 .force("x", d3.forceX(d => spectrumScale(d.spectrum_position)).strength(1))
@@ -973,13 +1042,8 @@
                     d.formality = spectrumYScale.invert(d.y);
                 });
             
-            const bubbles = bubblesGroup.selectAll(".spectrum-bubble")
-                .data(nodes, d => d.term); // Use key function to identify bubbles
-
-            bubbles.exit()
-                .transition().duration(300)
-                .style("opacity", 0)
-                .remove();
+            const bubbles = bubblesGroup.selectAll(".spectrum-bubble").data(nodes, d => d.term);
+            bubbles.exit().transition().duration(300).style("opacity", 0).remove();
             
             const newBubbles = bubbles.enter().append("g")
                 .attr("class", "spectrum-bubble word-bubble")
@@ -987,18 +1051,13 @@
                 .call(drag);
 
             newBubbles.append("circle")
-                .attr("r", 0)
-                .style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
-                .transition().duration(500).delay((d,i) => i*10)
-                .attr("r", d => bubbleSizeScale(d.frequency));
+                .attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
+                .transition().duration(500).delay((d,i) => i*10).attr("r", d => bubbleSizeScale(d.frequency));
             
-            newBubbles.append("text")
-                .text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
-                .transition().duration(500)
-                .style("opacity", 1);
+            newBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
+                .transition().duration(500).style("opacity", 1);
             
-            newBubbles.append("text")
-                .attr("class", "remove-btn")
+            newBubbles.append("text").attr("class", "remove-btn")
                 .attr("x", d => bubbleSizeScale(d.frequency) * 0.7)
                 .attr("y", d => -bubbleSizeScale(d.frequency) * 0.7)
                 .text("×")
@@ -1009,11 +1068,8 @@
                 });
             
             setupTooltipEvents(newBubbles);
-
-            bubbles.merge(newBubbles)
-                .transition().duration(750).ease(d3.easeCubicOut)
+            bubbles.merge(newBubbles).transition().duration(750).ease(d3.easeCubicOut)
                 .attr("transform", d => `translate(${d.x}, ${d.y})`);
-            
             spectrumBubbles = bubblesGroup.selectAll(".spectrum-bubble");
         }
 
@@ -1027,11 +1083,8 @@
             ];
 
             labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
-                .attr("class", "axis-label")
-                .attr("x", d => d.x).attr("y", d => d.y)
-                .attr("text-anchor", d => d.anchor)
-                .attr("dominant-baseline", "middle")
-                .text(d => d.text);
+                .attr("class", "axis-label").attr("x", d => d.x).attr("y", d => d.y)
+                .attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.text);
 
             const nodes = radarData.words.map(d => {
                 d.radarX = radarXScale(d.style);
@@ -1047,8 +1100,7 @@
 
             for (let i = 0; i < 300; ++i) simulation.tick();
             
-            currentBubbles = bubblesGroup.selectAll(".word-bubble")
-                .data(nodes, d => d.term)
+            currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term)
                 .enter().append("g").attr("class", "word-bubble");
 
             currentBubbles.append("circle").attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
@@ -1068,8 +1120,7 @@
                 return { term: ant, x: antonymRadius * Math.cos(angle), y: antonymRadius * Math.sin(angle) };
             });
             
-            currentAntonymBubbles = antonymsGroup.selectAll(".antonym-bubble")
-                .data(antonymNodes, d => d.term)
+            currentAntonymBubbles = antonymsGroup.selectAll(".antonym-bubble").data(antonymNodes, d => d.term)
                 .enter().append("g").attr("class", "word-bubble antonym-bubble");
 
             currentAntonymBubbles.append("circle").attr("r", 0).style("fill", "#d62728")
@@ -1083,17 +1134,17 @@
                 mainTitle.text(`Generating spectrum for "${currentRadarData.hub_word}" vs "${d.term}"...`);
                 scanner.classed("hidden", false);
                 try {
-                    const spectrumData = await fetchWordData({ word: currentRadarData.hub_word, antonym: d.term });
+                    const spectrumData = await fetchWordData({ start_word: currentRadarData.hub_word, end_word: d.term });
                     scanner.classed("hidden", true);
                     if (spectrumData && spectrumData.words) {
-                        switchToSpectrumView('antonym', spectrumData);
+                        drawSpectrumView();
+                        switchToSpectrumView('spectrum', spectrumData);
                     } else {
                         mainTitle.text(spectrumData.error || "Could not generate spectrum.");
                     }
                 } catch (error) {
                     scanner.classed("hidden", true);
-                    mainTitle.text("Error generating spectrum.");
-                    console.error(error);
+                    mainTitle.text("Error generating spectrum."); console.error(error);
                 }
             }).on("mouseover", (e, d) => {
                 speak(d.term);
@@ -1114,11 +1165,12 @@
             updateLegend(null);
         }
 
+        // --- UPDATED AND CORRECTED FUNCTION ---
         function switchToSpectrumView(type, data) {
             clearComparison();
             currentView = 'spectrum';
             activeSpectrum = type;
-            currentSpectrumData = data;
+            currentSpectrumData = data; // Store data regardless of type
 
             labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
             antonymsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
@@ -1127,15 +1179,15 @@
             spectrumGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
             addWordContainer.classed("hidden", false);
 
-            if (type === 'antonym') {
-                mainTitle.text(`Spectrum: "${data.start_word}" vs "${data.end_word}"`);
-                spectrumGroup.select(".spectrum-label-left").text(data.start_word.toUpperCase());
-                spectrumGroup.select(".spectrum-label-right").text(data.end_word.toUpperCase());
-                if (currentBubbles) {
-                    currentBubbles.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
-                }
-                updateSpectrumView(data.words);
+            // This logic is now general and works for both direct-to-spectrum and antonym clicks
+            mainTitle.text(`Spectrum: "${data.start_word}" vs "${data.end_word}"`);
+            spectrumGroup.select(".spectrum-label-left").text(data.start_word.toUpperCase());
+            spectrumGroup.select(".spectrum-label-right").text(data.end_word.toUpperCase());
+            
+            if (currentBubbles) {
+                currentBubbles.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
             }
+            updateSpectrumView(data.words);
         }
 
         function switchToRadarView() {
@@ -1180,17 +1232,44 @@
             legend.classed("hidden", !data);
         }
         
+        // --- Setup Event Listeners ---
         submitBtn.on("click", (event) => { event.preventDefault(); handleFormSubmit(event); });
-        drawRadarBackground();
-        drawSpectrumView();
         wordForm.on("submit", handleFormSubmit);
         d3.selectAll('#category-input, #custom-words-input').on('keydown', function(event) { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleFormSubmit(event); }});
-        d3.select('#word-input').on('input', updateSubmitButtonState);
         d3.selectAll('.pos-option').on('click', function() { d3.selectAll('.pos-option').classed('selected', false); d3.select(this).classed('selected', true); updateSubmitButtonState(); });
         d3.select(".header-logo").on("click", resetToInitialState);
         setupSoundToggle();
+        addWordBtn.on("click", handleAddWord);
+        addWordInput.on("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); handleAddWord(); } });
+        
+        d3.selectAll('.view-option').on('click', function() {
+            const selectedView = d3.select(this).attr('data-view');
+            if (selectedView === currentViewMode) return;
+            currentViewMode = selectedView;
+
+            d3.selectAll('.view-option').classed('selected', false);
+            d3.select(this).classed('selected', true);
+            const isRadar = selectedView === 'radar';
+
+            d3.select('#radar-input-container').classed('hidden', !isRadar);
+            d3.select('#spectrum-inputs-container').classed('hidden', isRadar);
+            
+            if (isRadar) {
+                mainTitle.text("Enter a word to build its Radar");
+                submitBtn.text("Build Radar");
+            } else {
+                mainTitle.text("Enter two words for a Spectrum");
+                submitBtn.text("Create Spectrum");
+            }
+            updateSubmitButtonState();
+        });
+        
         restartBtn.on("click", resetToInitialState);
         exportBtn.on("click", exportAsPNG);
+        
+        // --- Initial Draws ---
+        drawRadarBackground();
+        drawSpectrumView();
     });
 </script>
 </body>
