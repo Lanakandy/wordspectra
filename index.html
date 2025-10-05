@@ -224,8 +224,27 @@
             #category-input, #custom-words-input { font-size: 12px; padding: 8px 12px; width: min(80vw, 300px); }
         }
 
-        .header-logo { position: absolute; top: clamp(10px, 2vh, 20px); left: clamp(10px, 2vw, 20px); width: clamp(60px, 12vw, 90px); opacity: 1; transition: opacity 0.2s; }
-        .header-logo:hover { opacity: 0.7; }
+    #chart-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    padding-top: clamp(10px, 2vh, 20px);
+    pointer-events: none; /* Allows clicks to go through to the SVG below */
+   
+    }
+        .header-logo {
+    position: static; /* Remove absolute positioning from the body */
+    width: clamp(40px, 8vw, 60px);
+    opacity: 1;
+    transition: opacity 0.2s;
+    pointer-events: auto; /* Make the logo clickable */
+    cursor: pointer;
+    }
         
         #top-right-controls {
             position: absolute;
@@ -266,7 +285,16 @@
         #sound-toggle.sound-off path:not(.slash-icon) { opacity: 0.4; }
         #sound-toggle .slash-icon { display: none; }
         
-        h1 { color: #ffffff; font-weight: 300; text-align: center; cursor: pointer; transition: color 0.2s; font-size: clamp(1.2rem, 4vw, 2rem); margin: clamp(10px, 2vh, 20px) 10px; padding: 0 10px; }
+        h1 {
+    color: #ffffff;
+    font-weight: 300;
+    text-align: center;
+    transition: color 0.2s;
+    font-size: clamp(1.2rem, 4vw, 2rem);
+    margin: 0; 
+    padding: 0;
+    pointer-events: auto;
+    }
         h1:hover { color: #ffca85; }
         #chart-container { position: relative; width: calc(100vw - 20px); height: calc(100vh - 80px); max-width: 800px; max-height: 800px; min-width: 300px; min-height: 300px; }
         @media (max-width: 768px) { #chart-container { width: calc(100vw - 10px); height: calc(100vh - 60px); } h1 { font-size: clamp(1rem, 5vw, 1.5rem); margin: 5px; } }
@@ -418,8 +446,7 @@
     </style>
 </head>
 <body>
-    <img src="https://eltcation.com/wp-content/uploads/2025/06/ELTcation_left.png" alt="ELTcation Logo" class="header-logo">
-    
+       
     <div id="top-right-controls">
         <div id="sound-toggle" class="control-btn">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
@@ -442,9 +469,12 @@
         </div>
     </div>
 
-    <h1 id="main-title">Enter a word to build its Radar</h1>
     <div id="chart-container">
-        <div id="input-container">
+    <div id="chart-header">
+        <img src="https://eltcation.com/wp-content/uploads/2025/06/ELTcation_left.png" alt="ELTcation Logo" class="header-logo">
+        <h1 id="main-title">Enter a word to build its Radar</h1>
+    </div>    
+    <div id="input-container">
             <form id="word-form">
                 <input type="text" id="word-input" placeholder="e.g., see" autocomplete="off">
             </form>
@@ -749,33 +779,41 @@
         }
 
         function exportAsPNG() {
-            const exportArea = d3.select("#chart-container").node();
-            html2canvas(exportArea, {
-                backgroundColor: '#1a1a2e',
-                scale: 2,
-                logging: false,
-                useCORS: true
-            }).then(canvas => {
-                const ctx = canvas.getContext('2d');
-                const text = "Word Radar by ELTcation - www.eltcation.com";
-                const padding = 25;
-                ctx.font = 'bold 24px sans-serif';
-                ctx.fillStyle = 'rgba(224, 224, 224, 0.6)';
-                ctx.textAlign = 'center';
-                ctx.fillText(text, canvas.width / 2, canvas.height - padding);
-                const pngUrl = canvas.toDataURL("image/png");
-                const link = document.createElement("a");
-                const fileName = `word-radar-${currentRadarData?.hub_word || 'export'}.png`;
-                link.download = fileName;
-                link.href = pngUrl;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }).catch(err => {
-                console.error("html2canvas failed:", err);
-                alert("Sorry, there was an error exporting the image.");
-            });
-        }
+    // Hide the 'Add Word' container before exporting
+    d3.select("#add-word-container").style("display", "none");
+
+    const exportArea = d3.select("#chart-container").node();
+    html2canvas(exportArea, {
+        backgroundColor: '#1a1a2e',
+        scale: 2,
+        logging: false,
+        useCORS: true
+    }).then(canvas => {
+        // IMPORTANT: Show the container again after canvas is created
+        d3.select("#add-word-container").style("display", "flex");
+
+        const ctx = canvas.getContext('2d');
+        const text = "Word Radar by ELTcation - www.eltcation.com";
+        const padding = 25;
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillStyle = 'rgba(224, 224, 224, 0.6)';
+        ctx.textAlign = 'center';
+        ctx.fillText(text, canvas.width / 2, canvas.height - padding);
+        const pngUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        const fileName = `word-radar-${currentRadarData?.hub_word || currentSpectrumData?.start_word || 'export'}.png`;
+        link.download = fileName;
+        link.href = pngUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }).catch(err => {
+        // Also show the container again if there's an error
+        d3.select("#add-word-container").style("display", "flex");
+        console.error("html2canvas failed:", err);
+        alert("Sorry, there was an error exporting the image.");
+    });
+}
 
         async function fetchWordData(payload) {
             try {
@@ -1116,7 +1154,7 @@
         d3.selectAll('#category-input, #custom-words-input').on('keydown', function(event) { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleFormSubmit(event); }});
         d3.select('#word-input').on('input', updateSubmitButtonState);
         d3.selectAll('.pos-option').on('click', function() { d3.selectAll('.pos-option').classed('selected', false); d3.select(this).classed('selected', true); updateSubmitButtonState(); });
-        mainTitle.on("click", resetToInitialState);
+        d3.select(".header-logo").on("click", resetToInitialState);
         setupSoundToggle();
         restartBtn.on("click", resetToInitialState);
         exportBtn.on("click", exportAsPNG);
