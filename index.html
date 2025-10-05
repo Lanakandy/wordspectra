@@ -788,15 +788,37 @@
             }).on("mouseout", () => { if (selectedWords.length === 0) { tooltip.transition().duration(500).style("opacity", 0); } });
         }
 
-        function exportAsPNG() {
-            d3.select("#add-word-container").style("display", "none");
-            const exportArea = d3.select("#chart-container").node();
-            html2canvas(exportArea, {
-                backgroundColor: '#1a1a2e',
-                scale: 2,
-                logging: false,
-                useCORS: true
-            }).then(canvas => {
+        async function exportAsPNG() {
+            // Helper function to convert image URL to a Data URL to bypass CORS issues
+            const toDataURL = url => fetch(url)
+                .then(response => response.blob())
+                .then(blob => new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                }));
+
+            const logo = d3.select(".header-logo");
+            const originalUrl = logo.attr("src");
+            let dataUrl;
+
+            try {
+                // Fetch and convert the logo to a Data URL
+                dataUrl = await toDataURL(originalUrl);
+                // Temporarily replace the logo's src with the Data URL
+                logo.attr("src", dataUrl);
+
+                d3.select("#add-word-container").style("display", "none");
+                const exportArea = d3.select("#chart-container").node();
+                
+                const canvas = await html2canvas(exportArea, {
+                    backgroundColor: '#1a1a2e',
+                    scale: 2,
+                    logging: false,
+                    useCORS: true // Keep this, it helps with other potential assets
+                });
+
                 d3.select("#add-word-container").style("display", "flex");
                 const ctx = canvas.getContext('2d');
                 const text = "Word Radar by ELTcation - www.eltcation.com";
@@ -805,6 +827,7 @@
                 ctx.fillStyle = 'rgba(224, 224, 224, 0.6)';
                 ctx.textAlign = 'center';
                 ctx.fillText(text, canvas.width / 2, canvas.height - padding);
+                
                 const pngUrl = canvas.toDataURL("image/png");
                 const link = document.createElement("a");
                 const fileName = `word-radar-${currentRadarData?.hub_word || currentSpectrumData?.start_word || 'export'}.png`;
@@ -813,11 +836,17 @@
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-            }).catch(err => {
+
+            } catch (err) {
                 d3.select("#add-word-container").style("display", "flex");
                 console.error("html2canvas failed:", err);
                 alert("Sorry, there was an error exporting the image.");
-            });
+            } finally {
+                // IMPORTANT: Change the src back to the original URL after exporting
+                if (originalUrl) {
+                    logo.attr("src", originalUrl);
+                }
+            }
         }
 
         async function fetchWordData(payload) {
