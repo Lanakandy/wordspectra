@@ -677,15 +677,23 @@
 
         async function handleFormSubmit(event) {
             event.preventDefault();
-            inputContainer.classed("hidden", true);
-            legend.classed("hidden", true);
-            clearChart();
-            scanner.classed("hidden", false);
+
             const customWords = d3.select("#custom-words-input").property("value").trim().split(',').map(s => s.trim()).filter(Boolean);
 
+            // --- SPECTRUM VIEW LOGIC ---
             if (currentViewMode === 'spectrum') {
                 const startWord = d3.select("#start-word-input").property("value").trim();
                 const endWord = d3.select("#end-word-input").property("value").trim();
+
+                // Validation for Spectrum View
+                if (!startWord || !endWord) {
+                    alert("Please enter both a start and end word for the spectrum.");
+                    return;
+                }
+                
+                inputContainer.classed("hidden", true);
+                clearChart();
+                scanner.classed("hidden", false);
                 mainTitle.text(`Generating spectrum for "${startWord}" vs "${endWord}"...`);
                 
                 const payload = { start_word: startWord, end_word: endWord };
@@ -695,20 +703,31 @@
                 scanner.classed("hidden", true);
                 
                 if (spectrumData && spectrumData.words) {
-                    drawSpectrumView(); // Set up the axes and labels first
-                    switchToSpectrumView('spectrum', spectrumData); // Then transition and draw bubbles
+                    drawSpectrumView();
+                    switchToSpectrumView('spectrum', spectrumData);
                     restartBtn.classed("hidden", false);
                     exportBtn.classed("hidden", false);
                 } else {
                     mainTitle.text(spectrumData.error || `Could not generate spectrum. Click to try again.`);
                     restartBtn.classed("hidden", false);
                 }
-                return;
+                return; // End execution for spectrum mode
             }
             
+            // --- RADAR VIEW LOGIC ---
             currentSearch.word = d3.select("#word-input").property("value").trim();
             const selectedPosNode = d3.select(".pos-option.selected").node();
+            
+            // Validation for Radar View
+            if (!currentSearch.word || !selectedPosNode) {
+                 alert("Word and Part of Speech are required for Radar View.");
+                 return;
+            }
             currentSearch.partOfSpeech = selectedPosNode.dataset.pos;
+            
+            inputContainer.classed("hidden", true);
+            clearChart();
+            scanner.classed("hidden", false);
             
             if (customWords.length > 0) {
                 handleSenseSelection(customWords);
@@ -965,15 +984,30 @@
             switchToRadarView().then(() => {
                 clearChart();
                 mainTitle.text("Enter a word to build its Radar");
+                submitBtn.text("Build Radar"); // Reset button text
+                
+                // --- Reset the view mode and inputs ---
+                currentViewMode = 'radar';
+                d3.selectAll('.view-option').classed('selected', false);
+                d3.select('.view-option[data-view="radar"]').classed('selected', true);
+                d3.select('#radar-input-container').classed('hidden', false);
+                d3.select('#spectrum-inputs-container').classed('hidden', true);
+
                 inputContainer.classed("hidden", false);
                 senseSelector.classed("hidden", true);
                 legend.classed("hidden", true);
                 restartBtn.classed("hidden", true);
                 exportBtn.classed("hidden", true);
+                
+                // Clear all input fields
                 d3.select("#word-input").property("value", "");
+                d3.select("#start-word-input").property("value", "");
+                d3.select("#end-word-input").property("value", "");
                 d3.select("#custom-words-input").property("value", "");
                 d3.selectAll('.pos-option').classed('selected', false);
-                d3.select("#submit-btn").classed("hidden", true);
+                submitBtn.classed("hidden", true);
+                
+                d3.select("#word-input").node().focus();
             });
         }
 
