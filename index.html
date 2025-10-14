@@ -1107,7 +1107,7 @@
             spectrumBubbles = bubblesGroup.selectAll(".spectrum-bubble");
         }
 
-        function drawWordBubbles(radarData) {
+         function drawWordBubbles(radarData) {
             const labelOffset = maxRadius + (isMobile ? 10 : 18);
 
             const axisLabels = [
@@ -1146,11 +1146,12 @@
             setupTooltipEvents(currentBubbles);
             
             // --- THIS IS THE FIX ---
-            // Instead of placing antonyms *outside* the radar, we place them just *inside*.
-            // We get the antonym's own radius and subtract it from the maxRadius.
-            // This makes the antonym bubble's edge touch the outermost ring.
+            // Calculate the antonym position to be just outside the main radar.
+            // 1. Get the antonym bubble's size.
             const antonymBubbleRadius = isMobile ? 12 : 16;
-            const antonymRadius = maxRadius - antonymBubbleRadius - 5; // -5 for a little extra padding
+            // 2. The center of the antonym will be the radar's radius + the antonym's radius + a small padding.
+            // This makes the antonym bubble's edge sit just outside the outermost ring.
+            const antonymRadius = maxRadius + antonymBubbleRadius + 5; // +5 for a clean visual gap
 
             const quadrantCenters = [ 
                 Math.PI / 6,      // Top-Right (30°)
@@ -1171,7 +1172,7 @@
                 .enter().append("g").attr("class", "word-bubble antonym-bubble");
 
             currentAntonymBubbles.append("circle").attr("r", 0).style("fill", "#d62728")
-                .transition().duration(500).delay((d, i) => 500 + i * 50).attr("r", antonymBubbleRadius); // Use the variable here
+                .transition().duration(500).delay((d, i) => 500 + i * 50).attr("r", antonymBubbleRadius);
             currentAntonymBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
                 .transition().duration(500).delay((d, i) => 500 + i * 50).style("opacity", 1);
             currentAntonymBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
