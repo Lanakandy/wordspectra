@@ -1108,7 +1108,10 @@
         }
 
         function drawWordBubbles(radarData) {
-            const labelOffset = maxRadius + (isMobile ? 15 : 25);
+            // --- CHANGE 1: Bring axis labels closer to the radar ---
+            // We're reducing the extra space from 15/25 pixels to 10/18 pixels.
+            const labelOffset = maxRadius + (isMobile ? 10 : 18);
+
             const axisLabels = [
                 { text: 'FORMAL', x: 0, y: -labelOffset, anchor: 'middle' },
                 { text: 'EMPHATIC', x: labelOffset, y: 0, anchor: 'start' },
@@ -1121,7 +1124,7 @@
                 .attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.text);
 
             const nodes = radarData.words.map(d => {
-                d.radarX = radarXScale(d.intensity); // Changed from d.style to d.intensity
+                d.radarX = radarXScale(d.intensity);
                 d.radarY = radarYScale(d.formality);
                 return d;
             });
@@ -1145,7 +1148,18 @@
             setupTooltipEvents(currentBubbles);
 
             const antonymRadius = maxRadius + (isMobile ? 35 : 50);
-            const quadrantCenters = [ -Math.PI / 4, Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4 ];
+
+            // --- CHANGE 2: Widen the angles for antonyms to avoid the top/bottom ---
+            // Old angles were close to the vertical axis (e.g., 45°, 135°).
+            // New angles are closer to the horizontal axis (e.g., 30°, 150°),
+            // which prevents bubbles from appearing directly above or below the radar.
+            const quadrantCenters = [ 
+                Math.PI / 6,      // Top-Right (30°)
+                5 * Math.PI / 6,   // Top-Left (150°)
+                7 * Math.PI / 6,   // Bottom-Left (210°)
+                11 * Math.PI / 6   // Bottom-Right (330°)
+            ];
+
             const spreadAngle = Math.PI / 8;
             const antonymNodes = radarData.antonyms.map((ant, i) => {
                 const baseAngle = quadrantCenters[i % 4];
