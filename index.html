@@ -1111,9 +1111,9 @@
             const labelOffset = maxRadius + (isMobile ? 15 : 25);
             const axisLabels = [
                 { text: 'FORMAL', x: 0, y: -labelOffset, anchor: 'middle' },
-                { text: 'FIGURATIVE', x: labelOffset, y: 0, anchor: 'start' },
+                { text: 'EMPHATIC', x: labelOffset, y: 0, anchor: 'start' },
                 { text: 'INFORMAL', x: 0, y: labelOffset, anchor: 'middle' },
-                { text: 'LITERAL', x: -labelOffset, y: 0, anchor: 'end' }
+                { text: 'MILD', x: -labelOffset, y: 0, anchor: 'end' }
             ];
 
             labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
@@ -1121,7 +1121,7 @@
                 .attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.text);
 
             const nodes = radarData.words.map(d => {
-                d.radarX = radarXScale(d.style);
+                d.radarX = radarXScale(d.intensity); // Changed from d.style to d.intensity
                 d.radarY = radarYScale(d.formality);
                 return d;
             });
