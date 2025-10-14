@@ -1108,8 +1108,6 @@
         }
 
         function drawWordBubbles(radarData) {
-            // --- CHANGE 1: Bring axis labels closer to the radar ---
-            // We're reducing the extra space from 15/25 pixels to 10/18 pixels.
             const labelOffset = maxRadius + (isMobile ? 10 : 18);
 
             const axisLabels = [
@@ -1146,13 +1144,14 @@
                 .transition().duration(500).delay((d,i) => i * 20).style("opacity", 1);
             currentBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
             setupTooltipEvents(currentBubbles);
+            
+            // --- THIS IS THE FIX ---
+            // Instead of placing antonyms *outside* the radar, we place them just *inside*.
+            // We get the antonym's own radius and subtract it from the maxRadius.
+            // This makes the antonym bubble's edge touch the outermost ring.
+            const antonymBubbleRadius = isMobile ? 12 : 16;
+            const antonymRadius = maxRadius - antonymBubbleRadius - 5; // -5 for a little extra padding
 
-            const antonymRadius = maxRadius + (isMobile ? 35 : 50);
-
-            // --- CHANGE 2: Widen the angles for antonyms to avoid the top/bottom ---
-            // Old angles were close to the vertical axis (e.g., 45°, 135°).
-            // New angles are closer to the horizontal axis (e.g., 30°, 150°),
-            // which prevents bubbles from appearing directly above or below the radar.
             const quadrantCenters = [ 
                 Math.PI / 6,      // Top-Right (30°)
                 5 * Math.PI / 6,   // Top-Left (150°)
@@ -1172,7 +1171,7 @@
                 .enter().append("g").attr("class", "word-bubble antonym-bubble");
 
             currentAntonymBubbles.append("circle").attr("r", 0).style("fill", "#d62728")
-                .transition().duration(500).delay((d, i) => 500 + i * 50).attr("r", isMobile ? 12 : 16);
+                .transition().duration(500).delay((d, i) => 500 + i * 50).attr("r", antonymBubbleRadius); // Use the variable here
             currentAntonymBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
                 .transition().duration(500).delay((d, i) => 500 + i * 50).style("opacity", 1);
             currentAntonymBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
