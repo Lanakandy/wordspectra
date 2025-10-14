@@ -24,7 +24,7 @@ REQUIREMENTS:
 2.  **GENERATE ANTONYMS:** Provide 3-5 distinct antonyms for the hub word.
 3.  **CLASSIFY FILTERED SYNONYMS:** For each filtered word, generate the required data points:
     *   **formality:** Score from -1.0 (very informal) to 1.0 (very formal).
-    *   **style:** Score from -1.0 (literal) to 1.0 (figurative).
+    *   **intensity:** Score from -1.0 (weak/understated) to 1.0 (strong/emphatic). This measures the strength of the meaning. For example, for a hub word like "big", "large" might be 0.1, "huge" would be 0.5, and "gargantuan" would be 0.9.
     *   **ring:** Categorical distance from the core meaning (0: Core, 1: Common, 2: Specific, 3: Nuanced).
     *   **frequency:** Score from 0 (very rare) to 100 (very common).
     *   **definition:** A brief, clear definition.
@@ -42,7 +42,7 @@ JSON Structure:
   "antonyms": ["opposite1", "opposite2"],
   "words": [
     {
-      "term": "synonym_from_filtered_list", "ring": 1, "frequency": 75, "formality": -0.3, "style": 0.8, "definition": "...", "example": "...", "difficulty": "intermediate"
+      "term": "synonym_from_filtered_list", "ring": 1, "frequency": 75, "formality": -0.3, "intensity": 0.8, "definition": "...", "example": "...", "difficulty": "intermediate"
     }
   ]
 }`;
