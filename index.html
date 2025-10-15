@@ -1125,9 +1125,15 @@
                 { text: facet.spectrumLabels[0].toUpperCase(), x: -labelOffset, y: 0, anchor: 'end' }   // Left label (-1.0)
             ];
 
+            // --- THIS IS THE FIX ---
+            // A '.' was missing before the 'text-anchor' attribute.
             labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
-                .attr("class", "axis-label").attr("x", d => d.x).attr("y", d => d.y)
-                "text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.text);
+                .attr("class", "axis-label")
+                .attr("x", d => d.x)
+                .attr("y", d => d.y)
+                .attr("text-anchor", d => d.anchor)
+                .attr("dominant-baseline", "middle")
+                .text(d => d.text);
 
             const nodes = radarData.words.map(d => {
                 // Use the dynamic facetKey to get the score for the x-axis
@@ -1217,7 +1223,6 @@
             updateLegend(null);
         }
 
-        // --- UPDATED AND CORRECTED FUNCTION ---
         function switchToSpectrumView(type, data) {
             clearComparison();
             currentView = 'spectrum';
