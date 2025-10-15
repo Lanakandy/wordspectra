@@ -17,38 +17,42 @@ function generateCacheKey(object, prompt) {
 }
 
 function getLLMPrompt(word, partOfSpeech, synonyms) {
-    const systemPrompt = `You are a linguist creating a Word Radar dataset for language learners, based on the CEFR framework.
+    const systemPrompt = `You are an expert linguist creating a dynamic Word Radar dataset for language learners. Your primary task is to identify the most meaningful semantic spectrum for a given set of synonyms and then classify each word along that spectrum.
 
-REQUIREMENTS:
-1.  **FILTER SYNONYMS:** From the provided "Synonyms" list, select ONLY words that function as a **${partOfSpeech}**.
-2.  **GENERATE ANTONYMS:** Provide 3-5 distinct antonyms for the hub word.
-3.  **CLASSIFY FILTERED SYNONYMS:** For each filtered word, generate the required data points:
-    *   **formality:** A score from -1.0 (very informal) to 1.0 (very formal). Use the following guide:
-        - **1.0 (Formal):** Academic, professional, literary, or technical language (e.g., 'subsequent', 'articulate').
-        - **0.0 (Neutral):** Most common, everyday words. **Crucially, do not confuse 'common' with 'informal'.** Words like 'pretty', 'lovely', 'nice', 'walk' belong around 0.0.
-        - **-1.0 (Informal):** Slang, colloquialisms, or highly casual language used with close friends (e.g., 'gonna', 'chill', 'lame').
-    *   **intensity:** A score from -1.0 (mild) to 1.0 (emphatic). **The hub word itself is the reference point for 0.0 intensity.** Use this guide:
-        - **1.0 (Emphatic):** The word is significantly stronger or more extreme than the hub word (e.g., for hub word 'spooky', a synonym like 'terrifying' would be high).
-        - **0.0 (Neutral):** The word has a very similar intensity to the hub word.
-        - **-1.0 (Mild/Understated):** The word is weaker, more general, or less specific than the hub word (e.g., for hub word 'spooky', a synonym like 'weird' or 'odd' would have a negative score).
-    *   **ring:** Categorical distance from the core meaning (0: Core, 1: Common, 2: Specific, 3: Nuanced).
-    *   **frequency:** Score from 0 (very rare) to 100 (very common).
-    *   **definition:** A brief, clear definition.
-    *   **example:** A natural usage example.
-    *   **difficulty**: 'beginner', 'intermediate', or 'advanced'. **Crucially, this MUST be based on the CEFR framework, not just frequency.**
-        - **beginner (A1-A2):** Core vocabulary for simple, everyday situations. (e.g., happy, big, good, walk)
-        - **intermediate (B1-B2):** More descriptive, nuanced words for expressing opinions or discussing topics. (e.g., anxious, optimistic, confident, concerned)
-        - **advanced (C1-C2):** Sophisticated, formal, or specialized words for academic or professional contexts. (e.g., apprehensive, ebullient, meticulous)
+**MAIN TASK:**
 
-JSON Structure:
+1.  **Analyze Synonyms:** Review the provided list of synonyms for the hub word "${word}".
+2.  **Define a Semantic Facet:** Based on the synonyms, choose the single most important semantic spectrum that highlights their nuances. For example:
+    *   For synonyms of "big", the facet could be **Size** (from "Large" to "Enormous").
+    *   For synonyms of "walk", the facet could be **Pace** (from "Stroll" to "March").
+    *   For synonyms of "smart", the facet could be **Type of Intelligence** (from "Cunning" to "Wise").
+    *   For synonyms of "angry", the facet could be **Intensity** (from "Annoyed" to "Furious").
+3.  **Provide Facet Data:** Structure this information in a \`facet\` object with:
+    *   \`key\`: A single, lowercase programmatic key for the facet (e.g., "size", "pace", "intensity").
+    *   \`spectrumLabels\`: An array of two strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 respectively (e.g., ["Subtle", "Forceful"], ["Small", "Vast"]).
+4.  **Classify Words:** For each synonym, provide its data, using the \`key\` you defined for the score. Also, provide formality, frequency, etc.
+    *   **formality:** -1.0 (informal) to 1.0 (formal). 0.0 is neutral for common words.
+    *   **[your_facet_key]:** A score from -1.0 to 1.0 along the spectrum you defined. A score of 0.0 means the word is neutral or has a similar level to the hub word.
+5.  **Generate Antonyms:** Provide 3-5 distinct antonyms for the hub word.
+
+**JSON STRUCTURE:**
 {
   "hub_word": "original word",
   "part_of_speech": "provided part of speech",
-  "rings": ["Core", "Common", "Specific", "Nuanced"],
+  "facet": {
+    "key": "intensity",
+    "spectrumLabels": ["Subtle", "Forceful"]
+  },
   "antonyms": ["opposite1", "opposite2"],
   "words": [
     {
-      "term": "synonym_from_filtered_list", "ring": 1, "frequency": 75, "formality": -0.3, "intensity": 0.8, "definition": "...", "example": "...", "difficulty": "intermediate"
+      "term": "synonym_from_list",
+      "frequency": 75,
+      "formality": -0.3,
+      "intensity": 0.8, // Note: This key MUST match the facet.key
+      "definition": "...",
+      "example": "...",
+      "difficulty": "intermediate"
     }
   ]
 }`;
