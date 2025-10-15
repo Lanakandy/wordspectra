@@ -1107,22 +1107,31 @@
             spectrumBubbles = bubblesGroup.selectAll(".spectrum-bubble");
         }
 
-         function drawWordBubbles(radarData) {
+          function drawWordBubbles(radarData) {
+            // --- DYNAMIC FACET LOGIC ---
+            // Fallback for safety in case the LLM fails to provide a facet
+            const facet = radarData.facet || { 
+                key: 'intensity', 
+                spectrumLabels: ['MILD', 'EMPHATIC'] 
+            };
+            const facetKey = facet.key;
+            
+            // Dynamically set the axis labels from the received data
             const labelOffset = maxRadius + (isMobile ? 10 : 18);
-
             const axisLabels = [
                 { text: 'FORMAL', x: 0, y: -labelOffset, anchor: 'middle' },
-                { text: 'EMPHATIC', x: labelOffset, y: 0, anchor: 'start' },
+                { text: facet.spectrumLabels[1].toUpperCase(), x: labelOffset, y: 0, anchor: 'start' }, // Right label (1.0)
                 { text: 'INFORMAL', x: 0, y: labelOffset, anchor: 'middle' },
-                { text: 'MILD', x: -labelOffset, y: 0, anchor: 'end' }
+                { text: facet.spectrumLabels[0].toUpperCase(), x: -labelOffset, y: 0, anchor: 'end' }   // Left label (-1.0)
             ];
 
             labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
                 .attr("class", "axis-label").attr("x", d => d.x).attr("y", d => d.y)
-                .attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.text);
+                "text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.text);
 
             const nodes = radarData.words.map(d => {
-                d.radarX = radarXScale(d.intensity);
+                // Use the dynamic facetKey to get the score for the x-axis
+                d.radarX = radarXScale(d[facetKey]); 
                 d.radarY = radarYScale(d.formality);
                 return d;
             });
@@ -1145,13 +1154,8 @@
             currentBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
             setupTooltipEvents(currentBubbles);
             
-            // --- THIS IS THE FIX ---
-            // Calculate the antonym position to be just outside the main radar.
-            // 1. Get the antonym bubble's size.
             const antonymBubbleRadius = isMobile ? 12 : 16;
-            // 2. The center of the antonym will be the radar's radius + the antonym's radius + a small padding.
-            // This makes the antonym bubble's edge sit just outside the outermost ring.
-            const antonymRadius = maxRadius + antonymBubbleRadius + 5; // +5 for a clean visual gap
+            const antonymRadius = maxRadius + antonymBubbleRadius + 5; 
 
             const quadrantCenters = [ 
                 Math.PI / 6,      // Top-Right (30°)
