@@ -17,7 +17,7 @@ function generateCacheKey(object, prompt) {
 }
 
 function getLLMPrompt(word, partOfSpeech, synonyms) {
-    const systemPrompt = `You are a brilliant computational linguist and data visualization expert. Your task is to analyze a central English word and generate a complete JSON dataset for a 'Word Radar' visualization.
+    const systemPrompt = `You are a linguist creating a Word Radar dataset for language learners, based on the CEFR framework.
 
 REQUIREMENTS:
 1.  **FILTER SYNONYMS:** From the provided "Synonyms" list, select ONLY words that function as a **${partOfSpeech}**.
@@ -25,9 +25,12 @@ REQUIREMENTS:
 3.  **CLASSIFY FILTERED SYNONYMS:** For each filtered word, generate the required data points:
     *   **formality:** A score from -1.0 (very informal) to 1.0 (very formal). Use the following guide:
         - **1.0 (Formal):** Academic, professional, literary, or technical language (e.g., 'subsequent', 'articulate').
-        - **0.0 (Neutral):** Common, everyday words that can be used in various genres and styles. **Crucially, do not confuse 'common' with 'informal'.** Words like 'pretty', 'lovely', 'nice', 'walk' belong around 0.0.
-        - **-1.0 (Informal):** Conversational, slang, colloquialisms, or highly casual language used with close friends (e.g., 'gonna', 'chill', 'lame').
-    *   **intensity:** Score from -1.0 (weak/understated) to 1.0 (strong/emphatic). This measures the strength of the meaning. For example, for a hub word like "big", "large" might be 0.1, "huge" would be 0.5, and "gargantuan" would be 0.9.
+        - **0.0 (Neutral):** Most common, everyday words. **Crucially, do not confuse 'common' with 'informal'.** Words like 'pretty', 'lovely', 'nice', 'walk' belong around 0.0.
+        - **-1.0 (Informal):** Slang, colloquialisms, or highly casual language used with close friends (e.g., 'gonna', 'chill', 'lame').
+    *   **intensity:** A score from -1.0 (mild) to 1.0 (emphatic). **The hub word itself is the reference point for 0.0 intensity.** Use this guide:
+        - **1.0 (Emphatic):** The word is significantly stronger or more extreme than the hub word (e.g., for hub word 'spooky', a synonym like 'terrifying' would be high).
+        - **0.0 (Neutral):** The word has a very similar intensity to the hub word.
+        - **-1.0 (Mild/Understated):** The word is weaker, more general, or less specific than the hub word (e.g., for hub word 'spooky', a synonym like 'weird' or 'odd' would have a negative score).
     *   **ring:** Categorical distance from the core meaning (0: Core, 1: Common, 2: Specific, 3: Nuanced).
     *   **frequency:** Score from 0 (very rare) to 100 (very common).
     *   **definition:** A brief, clear definition.
