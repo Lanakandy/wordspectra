@@ -4,7 +4,6 @@ const fetch = require('node-fetch');
 const { getStore } = require('@netlify/blobs');
 const { createHash } = require('crypto');
 
-// ... (generateCacheKey, getLLMPrompt, getAntonymSpectrumPrompt, getSingleWordDataPrompt, etc. are unchanged) ...
 function generateCacheKey(object, prompt) {
     const ordered = Object.keys(object)
         .sort()
@@ -22,7 +21,7 @@ function getLLMPrompt(word, partOfSpeech, synonyms) {
 
 **MAIN TASK:**
 
-1.  **Analyze Synonyms:** Review the provided list of 15 synonyms for the hub word "${word}".
+1.  **Analyze Synonyms:** Review the provided list of all synonyms for the hub word "${word}".
 2.  **Define TWO Semantic Facets:** Based on the synonyms, choose the two most important semantic spectrums that highlight their nuances.
     *   **Primary Facet (X-axis):** This should be the most obvious or significant difference. For "scary", it might be **Intensity**.
     *   **Secondary Facet (Y-axis):** This should be a different, interesting dimension clear for a language learner. For "scary", it might be the **Nature of Fear** (e.g., "Psychological" vs. "Supernatural").
@@ -152,7 +151,7 @@ function processSensesWithClustering( allRawSenses, primarySenseCount = 3, maxTo
 
 async function callOpenRouterWithFallback(systemPrompt, userPrompt) {
     const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY; if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is not configured.'); 
-    const modelsToTry = [ "microsoft/mai-ds-r1:free", "mistralai/mistral-small-3.2-24b-instruct:free", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-120b:free", "google/gemini-flash-1.5-8b" ]; 
+    const modelsToTry = [ "mistralai/mistral-small-3.2-24b-instruct:free", "mistralai/mistral-7b-instruct:free", "openai/gpt-oss-120b:free", "google/gemini-flash-1.5-8b" ]; 
     for (const model of modelsToTry) { console.log(`Attempting API call with model: ${model}`); try { const response = await fetch("https://openrouter.ai/api/v1/chat/completions", { method: "POST", headers: { "Authorization": `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: model, response_format: { type: "json_object" }, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }] }) }); if (!response.ok) { const errorBody = await response.text(); console.warn(`Model '${model}' failed with status ${response.status}: ${errorBody}`); continue; } const data = await response.json(); if (data.choices && data.choices[0] && data.choices[0].message?.content) { console.log(`Successfully received response from: ${model}`); try { return JSON.parse(data.choices[0].message.content); } catch (parseError) { console.warn(`Model '${model}' returned unparseable JSON. Trying next model.`); continue; } } else { console.warn(`Model '${model}' returned no choices. Trying next model.`); } } catch (error) { console.error(`An unexpected network error occurred with model '${model}':`, error); } } throw new Error("All AI models failed to provide a valid response. Please try again later.");
 }
 
