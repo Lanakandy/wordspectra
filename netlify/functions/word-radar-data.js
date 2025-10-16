@@ -17,39 +17,42 @@ function generateCacheKey(object, prompt) {
 }
 
 function getLLMPrompt(word, partOfSpeech, synonyms) {
-    const systemPrompt = `You are an expert linguist creating a dynamic Word Radar dataset for language learners. Your primary task is to identify the most meaningful semantic spectrum for a given set of synonyms and then classify each word along that spectrum.
+    // MODIFIED PROMPT: Now asks for two orthogonal facets (facetX, facetY) instead of one facet and formality.
+    const systemPrompt = `You are an expert linguist creating a dynamic Word Radar dataset for language learners. Your primary task is to identify TWO meaningful, largely orthogonal semantic spectrums for a given set of synonyms and then classify each word along both spectrums.
 
 **MAIN TASK:**
 
 1.  **Analyze Synonyms:** Review the provided list of synonyms for the hub word "${word}".
-2.  **Define a Semantic Facet:** Based on the synonyms, choose the single most important semantic spectrum that highlights their nuances. For example:
-    *   For synonyms of "big", the facet could be **Size** (from "Large" to "Enormous").
-    *   For synonyms of "walk", the facet could be **Pace** (from "Stroll" to "March").
-    *   For synonyms of "smart", the facet could be **Type of Intelligence** (from "Cunning" to "Wise").
-    *   For synonyms of "angry", the facet could be **Intensity** (from "Annoyed" to "Furious").
-3.  **Provide Facet Data:** Structure this information in a \`facet\` object with:
-    *   \`key\`: A single, lowercase programmatic key for the facet (e.g., "size", "pace", "intensity").
-    *   \`spectrumLabels\`: An array of two strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 respectively (e.g., ["Subtle", "Forceful"], ["Small", "Vast"]).
-4.  **Classify Words:** For each synonym, provide its data, using the \`key\` you defined for the score. Also, provide formality, frequency, etc.
-    *   **formality:** -1.0 (informal) to 1.0 (formal). 0.0 is neutral for common words.
-    *   **[your_facet_key]:** A score from -1.0 to 1.0 along the spectrum you defined. A score of 0.0 means the word is neutral or has a similar level to the hub word.
+2.  **Define TWO Semantic Facets:** Based on the synonyms, choose the two most important semantic spectrums that highlight their nuances.
+    *   **Primary Facet (X-axis):** This should be the most obvious or significant difference. For "scary", it might be **Intensity**.
+    *   **Secondary Facet (Y-axis):** This should be a different, interesting dimension. For "scary", it might be the **Nature of Fear** (e.g., "Psychological" vs. "Supernatural").
+3.  **Provide Facet Data:** Structure this information in \`facetX\` and \`facetY\` objects, each with:
+    *   \`key\`: A single, lowercase programmatic key (e.g., "intensity", "nature_of_fear").
+    *   \`spectrumLabels\`: An array of two strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 respectively (e.g., ["Subtle", "Forceful"], ["Psychological", "Supernatural"]).
+4.  **Classify Words:** For each synonym, provide its data, using the keys you defined.
+    *   **[your_facetX_key]:** A score from -1.0 to 1.0 along the primary spectrum.
+    *   **[your_facetY_key]:** A score from -1.0 to 1.0 along the secondary spectrum.
 5.  **Generate Antonyms:** Provide 3-5 distinct antonyms for the hub word.
 
 **JSON STRUCTURE:**
 {
   "hub_word": "original word",
   "part_of_speech": "provided part of speech",
-  "facet": {
+  "facetX": {
     "key": "intensity",
-    "spectrumLabels": ["Subtle", "Forceful"]
+    "spectrumLabels": ["Unsettling Dread", "Overwhelming Terror"]
   },
-  "antonyms": ["opposite1", "opposite2"],
+  "facetY": {
+    "key": "source_of_fear",
+    "spectrumLabels": ["Psychological/Internal", "Supernatural/External"]
+  },
+  "antonyms": ["comforting", "reassuring", "soothing"],
   "words": [
     {
       "term": "synonym_from_list",
       "frequency": 75,
-      "formality": -0.3,
-      "intensity": 0.8, // Note: This key MUST match the facet.key
+      "intensity": 0.8,
+      "source_of_fear": -0.4,
       "definition": "...",
       "example": "...",
       "difficulty": "intermediate"
