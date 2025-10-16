@@ -22,10 +22,10 @@ function getLLMPrompt(word, partOfSpeech, synonyms) {
 
 **MAIN TASK:**
 
-1.  **Analyze Synonyms:** Review the provided list of synonyms for the hub word "${word}".
+1.  **Analyze Synonyms:** Review the provided list of 15 synonyms for the hub word "${word}".
 2.  **Define TWO Semantic Facets:** Based on the synonyms, choose the two most important semantic spectrums that highlight their nuances.
     *   **Primary Facet (X-axis):** This should be the most obvious or significant difference. For "scary", it might be **Intensity**.
-    *   **Secondary Facet (Y-axis):** This should be a different, interesting dimension. For "scary", it might be the **Nature of Fear** (e.g., "Psychological" vs. "Supernatural").
+    *   **Secondary Facet (Y-axis):** This should be a different, interesting dimension clear for a language learner. For "scary", it might be the **Nature of Fear** (e.g., "Psychological" vs. "Supernatural").
 3.  **Provide Facet Data:** Structure this information in \`facetX\` and \`facetY\` objects, each with:
     *   \`key\`: A single, lowercase programmatic key (e.g., "intensity", "nature_of_fear").
     *   \`spectrumLabels\`: An array of two strings for the ends of the spectrum, corresponding to scores of -1.0 and 1.0 respectively (e.g., ["Subtle", "Forceful"], ["Psychological", "Supernatural"]).
