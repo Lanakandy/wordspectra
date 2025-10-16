@@ -1108,130 +1108,129 @@
         }
 
           function drawWordBubbles(radarData) {
-            // --- DYNAMIC FACET LOGIC ---
-            // Fallback for safety in case the LLM fails to provide a facet
-            const facet = radarData.facet || { 
-                key: 'intensity', 
-                spectrumLabels: ['MILD', 'EMPHATIC'] 
-            };
-            const facetKey = facet.key;
+        // --- DYNAMIC DUAL-FACET LOGIC ---
+        // NEW: Define facetX and facetY with robust fallbacks.
+        const facetX = radarData.facetX || radarData.facet || { 
+            key: 'intensity', 
+            spectrumLabels: ['MILD', 'EMPHATIC'] 
+        };
+        const facetY = radarData.facetY || {
+            key: 'formality',
+            spectrumLabels: ['INFORMAL', 'FORMAL']
+        };
+
+        const facetXKey = facetX.key;
+        const facetYKey = facetY.key;
+        
+        // NEW: Dynamically set all four axis labels from the received data.
+        const labelOffset = maxRadius + (isMobile ? 10 : 18);
+        const axisLabels = [
+            // Y-axis labels from facetY
+            { text: facetY.spectrumLabels[1].toUpperCase(), x: 0, y: -labelOffset, anchor: 'middle' }, // Top
+            { text: facetY.spectrumLabels[0].toUpperCase(), x: 0, y: labelOffset, anchor: 'middle' },  // Bottom
+            // X-axis labels from facetX
+            { text: facetX.spectrumLabels[1].toUpperCase(), x: labelOffset, y: 0, anchor: 'start' },   // Right
+            { text: facetX.spectrumLabels[0].toUpperCase(), x: -labelOffset, y: 0, anchor: 'end' }     // Left
+        ];
+
+        labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
+            .attr("class", "axis-label")
+            .attr("x", d => d.x)
+            .attr("y", d => d.y)
+            .attr("text-anchor", d => d.anchor)
+            .attr("dominant-baseline", "middle")
+            .text(d => d.text);
+
+        // --- BUBBLE PLACEMENT (using the circular constraint logic from before) ---
+        const nodes = radarData.words.map(d => {
+            // NEW: Use the dynamic facet keys to get scores. Fallback to 0 if a score is missing.
+            const v_x = d[facetXKey] || 0;
+            // IMPORTANT: The vertical axis now uses facetYKey. We check for the old 'formality' key as a fallback.
+            const v_y = d[facetYKey] || d['formality'] || 0;
+
+            const magnitude = Math.sqrt(v_x * v_x + v_y * v_y);
+            let constrained_v_x = v_x;
+            let constrained_v_y = v_y;
+
+            if (magnitude > 1.0) {
+                constrained_v_x = v_x / magnitude;
+                constrained_v_y = v_y / magnitude;
+            }
             
-            // Dynamically set the axis labels from the received data
-            const labelOffset = maxRadius + (isMobile ? 10 : 18);
-            const axisLabels = [
-                { text: 'FORMAL', x: 0, y: -labelOffset, anchor: 'middle' },
-                { text: facet.spectrumLabels[1].toUpperCase(), x: labelOffset, y: 0, anchor: 'start' }, // Right label (1.0)
-                { text: 'INFORMAL', x: 0, y: labelOffset, anchor: 'middle' },
-                { text: facet.spectrumLabels[0].toUpperCase(), x: -labelOffset, y: 0, anchor: 'end' }   // Left label (-1.0)
-            ];
+            d.radarX = radarXScale(constrained_v_x); 
+            d.radarY = radarYScale(constrained_v_y); // Note: Y-scale is inverted in d3 (positive is down)
+            return d;
+        });
 
-            // A '.' was missing before the 'text-anchor' attribute.
-            labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
-                .attr("class", "axis-label")
-                .attr("x", d => d.x)
-                .attr("y", d => d.y)
-                .attr("text-anchor", d => d.anchor)
-                .attr("dominant-baseline", "middle")
-                .text(d => d.text);
+        const simulation = d3.forceSimulation(nodes)
+            .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 4).strength(1))
+            .force("x", d3.forceX(d => d.radarX).strength(0.1))
+            .force("y", d3.forceY(d => d.radarY).strength(0.1))
+            .stop();
 
-            // --- FIX FOR BUBBLE PLACEMENT ---
-            const nodes = radarData.words.map(d => {
-                // Get the raw scores for the two axes from the data. Default to 0 if missing.
-                const v_x = d[facetKey] || 0;
-                const v_y = d.formality || 0;
+        for (let i = 0; i < 300; ++i) simulation.tick();
+        
+        currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term)
+            .enter().append("g").attr("class", "word-bubble");
 
-                // The radar chart is circular, but the data is plotted on a Cartesian (x, y) grid.
-                // A point with high scores on both axes (e.g., x=0.9, y=0.9) would be plotted in a corner,
-                // outside the main circle. We need to constrain these points to a unit circle.
+        currentBubbles.append("circle").attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
+            .transition().duration(500).delay((d,i) => i * 20).attr("r", d => bubbleSizeScale(d.frequency));
+        currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
+            .transition().duration(500).delay((d,i) => i * 20).style("opacity", 1);
+        currentBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
+        setupTooltipEvents(currentBubbles);
+        
+        // --- Antonym logic remains unchanged ---
+        const antonymBubbleRadius = isMobile ? 12 : 16;
+        const antonymRadius = maxRadius + antonymBubbleRadius + 5; 
 
-                // Calculate the point's distance (magnitude) from the center (0,0).
-                const magnitude = Math.sqrt(v_x * v_x + v_y * v_y);
+        const quadrantCenters = [ 
+            Math.PI / 6,      // Top-Right (30°)
+            5 * Math.PI / 6,   // Top-Left (150°)
+            7 * Math.PI / 6,   // Bottom-Left (210°)
+            11 * Math.PI / 6   // Bottom-Right (330°)
+        ];
 
-                let constrained_v_x = v_x;
-                let constrained_v_y = v_y;
+        const spreadAngle = Math.PI / 8;
+        const antonymNodes = radarData.antonyms.map((ant, i) => {
+            const baseAngle = quadrantCenters[i % 4];
+            const offset = (Math.floor(i / 4) % 2 === 0 ? 1 : -1) * Math.floor(i / 4) * spreadAngle;
+            const angle = baseAngle + offset;
+            return { term: ant, x: antonymRadius * Math.cos(angle), y: antonymRadius * Math.sin(angle) };
+        });
+        
+        currentAntonymBubbles = antonymsGroup.selectAll(".antonym-bubble").data(antonymNodes, d => d.term)
+            .enter().append("g").attr("class", "word-bubble antonym-bubble");
 
-                // If the magnitude is > 1, the point is outside the unit circle.
-                // We normalize the vector by dividing its x and y components by its magnitude.
-                // This effectively pulls the point back to the edge of the circle while preserving its angle from the center.
-                if (magnitude > 1.0) {
-                    constrained_v_x = v_x / magnitude;
-                    constrained_v_y = v_y / magnitude;
+        currentAntonymBubbles.append("circle").attr("r", 0).style("fill", "#d62728")
+            .transition().duration(500).delay((d, i) => 500 + i * 50).attr("r", antonymBubbleRadius);
+        currentAntonymBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
+            .transition().duration(500).delay((d, i) => 500 + i * 50).style("opacity", 1);
+        currentAntonymBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
+        
+        currentAntonymBubbles.on("click", async (e, d) => {
+            e.stopPropagation();
+            mainTitle.text(`Generating spectrum for "${currentRadarData.hub_word}" vs "${d.term}"...`);
+            scanner.classed("hidden", false);
+            try {
+                const spectrumData = await fetchWordData({ start_word: currentRadarData.hub_word, end_word: d.term });
+                scanner.classed("hidden", true);
+                if (spectrumData && spectrumData.words) {
+                    drawSpectrumView();
+                    switchToSpectrumView('spectrum', spectrumData);
+                } else {
+                    mainTitle.text(spectrumData.error || "Could not generate spectrum.");
                 }
-                
-                // Now map these constrained, circular-bound coordinates to the pixel values on the radar.
-                d.radarX = radarXScale(constrained_v_x); 
-                d.radarY = radarYScale(constrained_v_y);
-                return d;
-            });
-
-            const simulation = d3.forceSimulation(nodes)
-                .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 4).strength(1))
-                .force("x", d3.forceX(d => d.radarX).strength(0.1))
-                .force("y", d3.forceY(d => d.radarY).strength(0.1))
-                .stop();
-
-            for (let i = 0; i < 300; ++i) simulation.tick();
-            
-            currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term)
-                .enter().append("g").attr("class", "word-bubble");
-
-            currentBubbles.append("circle").attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
-                .transition().duration(500).delay((d,i) => i * 20).attr("r", d => bubbleSizeScale(d.frequency));
-            currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
-                .transition().duration(500).delay((d,i) => i * 20).style("opacity", 1);
-            currentBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
-            setupTooltipEvents(currentBubbles);
-            
-            const antonymBubbleRadius = isMobile ? 12 : 16;
-            const antonymRadius = maxRadius + antonymBubbleRadius + 5; 
-
-            const quadrantCenters = [ 
-                Math.PI / 6,      // Top-Right (30°)
-                5 * Math.PI / 6,   // Top-Left (150°)
-                7 * Math.PI / 6,   // Bottom-Left (210°)
-                11 * Math.PI / 6   // Bottom-Right (330°)
-            ];
-
-            const spreadAngle = Math.PI / 8;
-            const antonymNodes = radarData.antonyms.map((ant, i) => {
-                const baseAngle = quadrantCenters[i % 4];
-                const offset = (Math.floor(i / 4) % 2 === 0 ? 1 : -1) * Math.floor(i / 4) * spreadAngle;
-                const angle = baseAngle + offset;
-                return { term: ant, x: antonymRadius * Math.cos(angle), y: antonymRadius * Math.sin(angle) };
-            });
-            
-            currentAntonymBubbles = antonymsGroup.selectAll(".antonym-bubble").data(antonymNodes, d => d.term)
-                .enter().append("g").attr("class", "word-bubble antonym-bubble");
-
-            currentAntonymBubbles.append("circle").attr("r", 0).style("fill", "#d62728")
-                .transition().duration(500).delay((d, i) => 500 + i * 50).attr("r", antonymBubbleRadius);
-            currentAntonymBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
-                .transition().duration(500).delay((d, i) => 500 + i * 50).style("opacity", 1);
-            currentAntonymBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
-            
-            currentAntonymBubbles.on("click", async (e, d) => {
-                e.stopPropagation();
-                mainTitle.text(`Generating spectrum for "${currentRadarData.hub_word}" vs "${d.term}"...`);
-                scanner.classed("hidden", false);
-                try {
-                    const spectrumData = await fetchWordData({ start_word: currentRadarData.hub_word, end_word: d.term });
-                    scanner.classed("hidden", true);
-                    if (spectrumData && spectrumData.words) {
-                        drawSpectrumView();
-                        switchToSpectrumView('spectrum', spectrumData);
-                    } else {
-                        mainTitle.text(spectrumData.error || "Could not generate spectrum.");
-                    }
-                } catch (error) {
-                    scanner.classed("hidden", true);
-                    mainTitle.text("Error generating spectrum."); console.error(error);
-                }
-            }).on("mouseover", (e, d) => {
-                speak(d.term);
-                tooltip.transition().duration(200).style("opacity", .95);
-                tooltip.html(`<h3>${d.term}</h3><p><em>An opposite of "${currentRadarData.hub_word}"</em></p>`);
-            }).on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
-        }
+            } catch (error) {
+                scanner.classed("hidden", true);
+                mainTitle.text("Error generating spectrum."); console.error(error);
+            }
+        }).on("mouseover", (e, d) => {
+            speak(d.term);
+            tooltip.transition().duration(200).style("opacity", .95);
+            tooltip.html(`<h3>${d.term}</h3><p><em>An opposite of "${currentRadarData.hub_word}"</em></p>`);
+        }).on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+    }
         
         function clearChart() {
             clearComparison();
