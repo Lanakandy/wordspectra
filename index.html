@@ -1125,7 +1125,6 @@
                 { text: facet.spectrumLabels[0].toUpperCase(), x: -labelOffset, y: 0, anchor: 'end' }   // Left label (-1.0)
             ];
 
-            // --- THIS IS THE FIX ---
             // A '.' was missing before the 'text-anchor' attribute.
             labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
                 .attr("class", "axis-label")
@@ -1135,10 +1134,33 @@
                 .attr("dominant-baseline", "middle")
                 .text(d => d.text);
 
+            // --- FIX FOR BUBBLE PLACEMENT ---
             const nodes = radarData.words.map(d => {
-                // Use the dynamic facetKey to get the score for the x-axis
-                d.radarX = radarXScale(d[facetKey]); 
-                d.radarY = radarYScale(d.formality);
+                // Get the raw scores for the two axes from the data. Default to 0 if missing.
+                const v_x = d[facetKey] || 0;
+                const v_y = d.formality || 0;
+
+                // The radar chart is circular, but the data is plotted on a Cartesian (x, y) grid.
+                // A point with high scores on both axes (e.g., x=0.9, y=0.9) would be plotted in a corner,
+                // outside the main circle. We need to constrain these points to a unit circle.
+
+                // Calculate the point's distance (magnitude) from the center (0,0).
+                const magnitude = Math.sqrt(v_x * v_x + v_y * v_y);
+
+                let constrained_v_x = v_x;
+                let constrained_v_y = v_y;
+
+                // If the magnitude is > 1, the point is outside the unit circle.
+                // We normalize the vector by dividing its x and y components by its magnitude.
+                // This effectively pulls the point back to the edge of the circle while preserving its angle from the center.
+                if (magnitude > 1.0) {
+                    constrained_v_x = v_x / magnitude;
+                    constrained_v_y = v_y / magnitude;
+                }
+                
+                // Now map these constrained, circular-bound coordinates to the pixel values on the radar.
+                d.radarX = radarXScale(constrained_v_x); 
+                d.radarY = radarYScale(constrained_v_y);
                 return d;
             });
 
@@ -1304,7 +1326,7 @@
             if (selectedView === currentViewMode) return;
             currentViewMode = selectedView;
 
-            d3.selectAll('.view-option').classed('selected', false);
+            d3.selectAll('.view-option').classed('selected', true);
             d3.select(this).classed('selected', true);
             const isRadar = selectedView === 'radar';
 
