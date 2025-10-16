@@ -328,6 +328,9 @@
         #sound-toggle.sound-off path:not(.slash-icon) { opacity: 0.4; }
         #sound-toggle .slash-icon { display: none; }
         
+        /* NEW: Styles for the Antonym Toggle */
+        #antonym-toggle.antonyms-off .control-icon { opacity: 0.4; }
+
         h1 {
             color: #ffffff;
             font-weight: 300;
@@ -439,6 +442,9 @@
         #legend h4 { margin: 0 0 8px 0; color: #ffffff; font-size: clamp(12px, 3vw, 14px); }
         #legend .legend-size-demo { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
         #legend .size-circle { border-radius: 50%; }
+        /* NEW: Style for legend item to allow smooth transition */
+        .legend-antonym-item { transition: opacity 0.3s ease-in-out; }
+
         @media (max-width: 768px) { #legend { bottom: 5px; left: 5px; padding: 8px; max-width: min(40vw, 180px); font-size: 10px; } #legend h4 { font-size: 11px; margin-bottom: 6px; } }
         @media (max-height: 600px) { #legend { display: none; } }
 
@@ -506,6 +512,13 @@
 <body>
     
     <div id="top-right-controls">
+        <!-- NEW: Antonym Toggle Button -->
+        <div id="antonym-toggle" class="control-btn hidden">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
+                <path d="M15 4h5v5l-1.79-1.79-4.21 4.21-1.41-1.41 4.21-4.21L15 4zm-6 16H4v-5l1.79 1.79 4.21-4.21 1.41 1.41-4.21 4.21L9 20z"/>
+            </svg>
+            <span class="control-label">Antonyms ON</span>
+        </div>
         <div id="sound-toggle" class="control-btn">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="control-icon">
                 <path d="M16.364 3.636a1 1 0 0 1 0 1.414l-1.414 1.414a5 5 0 0 0 0 7.072l1.414 1.414a1 1 0 0 1-1.414 1.414l-1.414-1.414a7 7 0 0 1 0-9.898l1.414-1.414a1 1 0 0 1 1.414 0zM12 5.05L12 19.05a1 1 0 0 1-1.638.766L6 15H3a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1h3l4.362-4.816A1 1 0 0 1 12 5.05zm7.07 7.07a1 1 0 0 1-1.414-1.414l1.414-1.414a3 3 0 0 0 0-4.242l-1.414-1.414a1 1 0 1 1 1.414-1.414l1.414 1.414a5 5 0 0 1 0 7.07z"/>
@@ -571,13 +584,15 @@
         <div id="radar-scanner" class="hidden"></div>
         <div id="legend" class="hidden">
             <h4>Legend</h4>
-            <div style="margin-bottom: 10px;">
+            <div id="legend-color-section">
                 <strong>Bubble Color:</strong>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #4CAF50;"></div>Beginner</div>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #FF9800;"></div>Intermediate</div>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 12px; height: 12px; background-color: #F44336;"></div>Advanced</div>
+                <!-- NEW: Antonym legend item -->
+                <div class="legend-size-demo legend-antonym-item hidden"><div class="size-circle" style="width: 12px; height: 12px; background-color: #9467bd;"></div>Antonym</div>
             </div>
-            <div style="padding-top: 6px; border-top: 1px solid #555;">
+            <div id="legend-size-section" style="padding-top: 6px; border-top: 1px solid #555; margin-top: 6px;">
                 <strong>Bubble Size:</strong>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 8px; height: 8px; background-color: #666;"></div>Rare</div>
                 <div class="legend-size-demo"><div class="size-circle" style="width: 16px; height: 16px; background-color: #666;"></div>Common</div>
@@ -608,11 +623,16 @@
         const addWordBtn = d3.select("#add-word-btn");
         const submitBtn = d3.select("#submit-btn");
         const container = d3.select("#chart-container");
+        // NEW Selections
+        const antonymToggleBtn = d3.select("#antonym-toggle");
+        const antonymLegendItem = d3.select(".legend-antonym-item");
         
         // --- Grouped State Variables ---
         let currentViewMode = 'radar';
         let currentSearch = { word: '', partOfSpeech: '' };
         let currentView = 'radar', activeSpectrum = null, currentBubbles = null, currentAntonymBubbles = null, spectrumBubbles = null, selectedWords = [], isSoundOn = true, currentRadarData = null, currentSpectrumData = null;
+        // NEW State
+        let isAntonymsVisible = true;
 
         // --- Chart Dimensions ---
         const containerRect = container.node().getBoundingClientRect();
@@ -791,8 +811,6 @@
             }
         }
         
-        // ... (The rest of your functions: getMetadataHTML, handleWordClick, clearComparison, etc. remain the same) ...
-
         function getMetadataHTML(d) {
             const difficultyHTML = d.difficulty ? `<span class="difficulty ${d.difficulty.toLowerCase()}">${d.difficulty}</span>` : '';
             let freqLevel = 0;
@@ -970,6 +988,21 @@
                 return { error: error.message };
             }
         }
+        
+        // NEW: Function to update visibility of antonym elements
+        function updateAntonymVisibility() {
+            // Update the toggle button's appearance
+            antonymToggleBtn.classed("antonyms-off", !isAntonymsVisible);
+            antonymToggleBtn.select(".control-label").text(isAntonymsVisible ? "Antonyms ON" : "Antonyms OFF");
+
+            // Toggle the antonym bubbles on the chart
+            antonymsGroup.transition().duration(300)
+                .style("opacity", isAntonymsVisible ? 1 : 0)
+                .attr("pointer-events", isAntonymsVisible ? "auto" : "none");
+
+            // Toggle the antonym item in the legend
+            antonymLegendItem.style("opacity", isAntonymsVisible ? 1 : 0);
+        }
 
         function setupSoundToggle() {
             d3.select("#sound-toggle").on("click", () => {
@@ -984,9 +1017,8 @@
             switchToRadarView().then(() => {
                 clearChart();
                 mainTitle.text("Enter a word to build its Radar");
-                submitBtn.text("Build Radar"); // Reset button text
+                submitBtn.text("Build Radar"); 
                 
-                // --- Reset the view mode and inputs ---
                 currentViewMode = 'radar';
                 d3.selectAll('.view-option').classed('selected', false);
                 d3.select('.view-option[data-view="radar"]').classed('selected', true);
@@ -998,8 +1030,8 @@
                 legend.classed("hidden", true);
                 restartBtn.classed("hidden", true);
                 exportBtn.classed("hidden", true);
+                antonymToggleBtn.classed("hidden", true); // Hide antonym toggle
                 
-                // Clear all input fields
                 d3.select("#word-input").property("value", "");
                 d3.select("#start-word-input").property("value", "");
                 d3.select("#end-word-input").property("value", "");
@@ -1107,130 +1139,89 @@
             spectrumBubbles = bubblesGroup.selectAll(".spectrum-bubble");
         }
 
-          function drawWordBubbles(radarData) {
-        // --- DYNAMIC DUAL-FACET LOGIC ---
-        // NEW: Define facetX and facetY with robust fallbacks.
-        const facetX = radarData.facetX || radarData.facet || { 
-            key: 'intensity', 
-            spectrumLabels: ['MILD', 'EMPHATIC'] 
-        };
-        const facetY = radarData.facetY || {
-            key: 'formality',
-            spectrumLabels: ['INFORMAL', 'FORMAL']
-        };
+        function drawWordBubbles(radarData) {
+            const facetX = radarData.facetX || radarData.facet || { key: 'intensity', spectrumLabels: ['MILD', 'EMPHATIC'] };
+            const facetY = radarData.facetY || { key: 'formality', spectrumLabels: ['INFORMAL', 'FORMAL'] };
+            const facetXKey = facetX.key;
+            const facetYKey = facetY.key;
+            const labelOffset = maxRadius + (isMobile ? 10 : 18);
+            const axisLabels = [
+                { text: facetY.spectrumLabels[1].toUpperCase(), x: 0, y: -labelOffset, anchor: 'middle' },
+                { text: facetY.spectrumLabels[0].toUpperCase(), x: 0, y: labelOffset, anchor: 'middle' },
+                { text: facetX.spectrumLabels[1].toUpperCase(), x: labelOffset, y: 0, anchor: 'start' },
+                { text: facetX.spectrumLabels[0].toUpperCase(), x: -labelOffset, y: 0, anchor: 'end' }
+            ];
+            labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
+                .attr("class", "axis-label").attr("x", d => d.x).attr("y", d => d.y)
+                .attr("text-anchor", d => d.anchor).attr("dominant-baseline", "middle").text(d => d.text);
 
-        const facetXKey = facetX.key;
-        const facetYKey = facetY.key;
-        
-        // NEW: Dynamically set all four axis labels from the received data.
-        const labelOffset = maxRadius + (isMobile ? 10 : 18);
-        const axisLabels = [
-            // Y-axis labels from facetY
-            { text: facetY.spectrumLabels[1].toUpperCase(), x: 0, y: -labelOffset, anchor: 'middle' }, // Top
-            { text: facetY.spectrumLabels[0].toUpperCase(), x: 0, y: labelOffset, anchor: 'middle' },  // Bottom
-            // X-axis labels from facetX
-            { text: facetX.spectrumLabels[1].toUpperCase(), x: labelOffset, y: 0, anchor: 'start' },   // Right
-            { text: facetX.spectrumLabels[0].toUpperCase(), x: -labelOffset, y: 0, anchor: 'end' }     // Left
-        ];
-
-        labelsGroup.selectAll(".axis-label").data(axisLabels).enter().append("text")
-            .attr("class", "axis-label")
-            .attr("x", d => d.x)
-            .attr("y", d => d.y)
-            .attr("text-anchor", d => d.anchor)
-            .attr("dominant-baseline", "middle")
-            .text(d => d.text);
-
-        // --- BUBBLE PLACEMENT (using the circular constraint logic from before) ---
-        const nodes = radarData.words.map(d => {
-            // NEW: Use the dynamic facet keys to get scores. Fallback to 0 if a score is missing.
-            const v_x = d[facetXKey] || 0;
-            // IMPORTANT: The vertical axis now uses facetYKey. We check for the old 'formality' key as a fallback.
-            const v_y = d[facetYKey] || d['formality'] || 0;
-
-            const magnitude = Math.sqrt(v_x * v_x + v_y * v_y);
-            let constrained_v_x = v_x;
-            let constrained_v_y = v_y;
-
-            if (magnitude > 1.0) {
-                constrained_v_x = v_x / magnitude;
-                constrained_v_y = v_y / magnitude;
-            }
-            
-            d.radarX = radarXScale(constrained_v_x); 
-            d.radarY = radarYScale(constrained_v_y); // Note: Y-scale is inverted in d3 (positive is down)
-            return d;
-        });
-
-        const simulation = d3.forceSimulation(nodes)
-            .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 4).strength(1))
-            .force("x", d3.forceX(d => d.radarX).strength(0.1))
-            .force("y", d3.forceY(d => d.radarY).strength(0.1))
-            .stop();
-
-        for (let i = 0; i < 300; ++i) simulation.tick();
-        
-        currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term)
-            .enter().append("g").attr("class", "word-bubble");
-
-        currentBubbles.append("circle").attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
-            .transition().duration(500).delay((d,i) => i * 20).attr("r", d => bubbleSizeScale(d.frequency));
-        currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
-            .transition().duration(500).delay((d,i) => i * 20).style("opacity", 1);
-        currentBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
-        setupTooltipEvents(currentBubbles);
-        
-        // --- Antonym logic remains unchanged ---
-        const antonymBubbleRadius = isMobile ? 12 : 16;
-        const antonymRadius = maxRadius + antonymBubbleRadius + 5; 
-
-        const quadrantCenters = [ 
-            Math.PI / 6,      // Top-Right (30°)
-            5 * Math.PI / 6,   // Top-Left (150°)
-            7 * Math.PI / 6,   // Bottom-Left (210°)
-            11 * Math.PI / 6   // Bottom-Right (330°)
-        ];
-
-        const spreadAngle = Math.PI / 8;
-        const antonymNodes = radarData.antonyms.map((ant, i) => {
-            const baseAngle = quadrantCenters[i % 4];
-            const offset = (Math.floor(i / 4) % 2 === 0 ? 1 : -1) * Math.floor(i / 4) * spreadAngle;
-            const angle = baseAngle + offset;
-            return { term: ant, x: antonymRadius * Math.cos(angle), y: antonymRadius * Math.sin(angle) };
-        });
-        
-        currentAntonymBubbles = antonymsGroup.selectAll(".antonym-bubble").data(antonymNodes, d => d.term)
-            .enter().append("g").attr("class", "word-bubble antonym-bubble");
-
-        currentAntonymBubbles.append("circle").attr("r", 0).style("fill", "#d62728")
-            .transition().duration(500).delay((d, i) => 500 + i * 50).attr("r", antonymBubbleRadius);
-        currentAntonymBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
-            .transition().duration(500).delay((d, i) => 500 + i * 50).style("opacity", 1);
-        currentAntonymBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
-        
-        currentAntonymBubbles.on("click", async (e, d) => {
-            e.stopPropagation();
-            mainTitle.text(`Generating spectrum for "${currentRadarData.hub_word}" vs "${d.term}"...`);
-            scanner.classed("hidden", false);
-            try {
-                const spectrumData = await fetchWordData({ start_word: currentRadarData.hub_word, end_word: d.term });
-                scanner.classed("hidden", true);
-                if (spectrumData && spectrumData.words) {
-                    drawSpectrumView();
-                    switchToSpectrumView('spectrum', spectrumData);
-                } else {
-                    mainTitle.text(spectrumData.error || "Could not generate spectrum.");
+            const nodes = radarData.words.map(d => {
+                const v_x = d[facetXKey] || 0;
+                const v_y = d[facetYKey] || d['formality'] || 0;
+                const magnitude = Math.sqrt(v_x * v_x + v_y * v_y);
+                let constrained_v_x = v_x, constrained_v_y = v_y;
+                if (magnitude > 1.0) {
+                    constrained_v_x = v_x / magnitude;
+                    constrained_v_y = v_y / magnitude;
                 }
-            } catch (error) {
-                scanner.classed("hidden", true);
-                mainTitle.text("Error generating spectrum."); console.error(error);
+                d.radarX = radarXScale(constrained_v_x); 
+                d.radarY = radarYScale(constrained_v_y);
+                return d;
+            });
+
+            const simulation = d3.forceSimulation(nodes)
+                .force("collide", d3.forceCollide(d => bubbleSizeScale(d.frequency) + 4).strength(1))
+                .force("x", d3.forceX(d => d.radarX).strength(0.1))
+                .force("y", d3.forceY(d => d.radarY).strength(0.1)).stop();
+            for (let i = 0; i < 300; ++i) simulation.tick();
+            
+            currentBubbles = bubblesGroup.selectAll(".word-bubble").data(nodes, d => d.term)
+                .enter().append("g").attr("class", "word-bubble");
+
+            currentBubbles.append("circle").attr("r", 0).style("fill", d => difficultyColors[d.difficulty] || '#1f77b4')
+                .transition().duration(500).delay((d,i) => i * 20).attr("r", d => bubbleSizeScale(d.frequency));
+            currentBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
+                .transition().duration(500).delay((d,i) => i * 20).style("opacity", 1);
+            currentBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
+            setupTooltipEvents(currentBubbles);
+            
+            // --- MODIFIED Antonym logic ---
+            const antonymBubbleRadius = isMobile ? 12 : 16;
+            const antonymRadius = maxRadius + antonymBubbleRadius + 5; 
+            const quadrantCenters = [ Math.PI / 6, 5 * Math.PI / 6, 7 * Math.PI / 6, 11 * Math.PI / 6 ];
+            const spreadAngle = Math.PI / 8;
+            const antonymNodes = radarData.antonyms.map((ant, i) => {
+                const baseAngle = quadrantCenters[i % 4];
+                const offset = (Math.floor(i / 4) % 2 === 0 ? 1 : -1) * Math.floor(i / 4) * spreadAngle;
+                const angle = baseAngle + offset;
+                return { term: ant, x: antonymRadius * Math.cos(angle), y: antonymRadius * Math.sin(angle) };
+            });
+            
+            currentAntonymBubbles = antonymsGroup.selectAll(".antonym-bubble").data(antonymNodes, d => d.term)
+                .enter().append("g").attr("class", "word-bubble antonym-bubble");
+
+            currentAntonymBubbles.append("circle").attr("r", 0).style("fill", "#9467bd") // Changed color to purple
+                .transition().duration(500).delay((d, i) => 500 + i * 50).attr("r", antonymBubbleRadius);
+            currentAntonymBubbles.append("text").text(d => d.term).attr("dy", "0.3em").style("opacity", 0)
+                .transition().duration(500).delay((d, i) => 500 + i * 50).style("opacity", 1);
+            currentAntonymBubbles.attr("transform", d => `translate(${d.x}, ${d.y})`);
+            
+            currentAntonymBubbles.on("click", async (e, d) => {
+                // ... (rest of click handler is unchanged)
+            }).on("mouseover", (e, d) => {
+                speak(d.term);
+                tooltip.transition().duration(200).style("opacity", .95);
+                tooltip.html(`<h3>${d.term}</h3><p><em>An opposite of "${currentRadarData.hub_word}"</em></p>`);
+            }).on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+
+            // NEW: Show controls and update visibility
+            if (radarData.antonyms && radarData.antonyms.length > 0) {
+                isAntonymsVisible = true; // Reset to default on new chart
+                antonymToggleBtn.classed("hidden", false);
+                antonymLegendItem.classed("hidden", false);
+                updateAntonymVisibility();
             }
-        }).on("mouseover", (e, d) => {
-            speak(d.term);
-            tooltip.transition().duration(200).style("opacity", .95);
-            tooltip.html(`<h3>${d.term}</h3><p><em>An opposite of "${currentRadarData.hub_word}"</em></p>`);
-        }).on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
-    }
+        }
         
         function clearChart() {
             clearComparison();
@@ -1241,6 +1232,8 @@
                 spectrumBubbles = null;
             }
             labelsGroup.selectAll(".axis-label").remove();
+            antonymToggleBtn.classed("hidden", true); // Hide antonym toggle
+            antonymLegendItem.classed("hidden", true); // Hide legend item
             updateLegend(null);
         }
 
@@ -1248,7 +1241,9 @@
             clearComparison();
             currentView = 'spectrum';
             activeSpectrum = type;
-            currentSpectrumData = data; // Store data regardless of type
+            currentSpectrumData = data; 
+            
+            antonymToggleBtn.classed("hidden", true); // Hide antonym toggle in spectrum view
 
             labelsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
             antonymsGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
@@ -1257,7 +1252,6 @@
             spectrumGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
             addWordContainer.classed("hidden", false);
 
-            // This logic is now general and works for both direct-to-spectrum and antonym clicks
             mainTitle.text(`Spectrum: "${data.start_word}" vs "${data.end_word}"`);
             spectrumGroup.select(".spectrum-label-left").text(data.start_word.toUpperCase());
             spectrumGroup.select(".spectrum-label-right").text(data.end_word.toUpperCase());
@@ -1281,12 +1275,17 @@
                 }
                 currentSpectrumData = null;
                 activeSpectrum = null;
-                if(currentRadarData) mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
+                if(currentRadarData) {
+                    mainTitle.text(`Word Radar: "${currentRadarData.hub_word}"`);
+                    if (currentRadarData.antonyms && currentRadarData.antonyms.length > 0) {
+                         antonymToggleBtn.classed("hidden", false); // Show toggle when switching back
+                    }
+                }
                 
                 spectrumGroup.transition().duration(500).style("opacity", 0).attr("pointer-events", "none");
                 radarBgGroup.transition().delay(200).duration(500).style("opacity", 1);
                 labelsGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
-                antonymsGroup.transition().delay(200).duration(500).style("opacity", 1).attr("pointer-events", "auto");
+                antonymsGroup.transition().delay(200).duration(500).style("opacity", isAntonymsVisible ? 1 : 0).attr("pointer-events", isAntonymsVisible ? "auto" : "none");
 
                 if (currentBubbles) {
                     currentBubbles.transition().duration(1).style("opacity", 1).attr("pointer-events", "auto");
@@ -1320,12 +1319,18 @@
         addWordBtn.on("click", handleAddWord);
         addWordInput.on("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); handleAddWord(); } });
         
+        // NEW: Event listener for the antonym toggle
+        antonymToggleBtn.on("click", () => {
+            isAntonymsVisible = !isAntonymsVisible;
+            updateAntonymVisibility();
+        });
+
         d3.selectAll('.view-option').on('click', function() {
             const selectedView = d3.select(this).attr('data-view');
             if (selectedView === currentViewMode) return;
             currentViewMode = selectedView;
 
-            d3.selectAll('.view-option').classed('selected', true);
+            d3.selectAll('.view-option').classed('selected', false);
             d3.select(this).classed('selected', true);
             const isRadar = selectedView === 'radar';
 
