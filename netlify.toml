@@ -6,7 +6,7 @@
   store = "word-radar-cache"
 
 [functions."*"]
-  timeout = 26
+  timeout = 25
 
 [[redirects]]
   from = "/*"
